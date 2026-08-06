@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { inferModules, type QuickOnboardingAnswers } from '@core';
 import { useStore } from '../store';
-import { MODULES, MODULE_ORDER, ONBOARD_QUESTIONS, EXPANDED_TRAITS } from '../modules';
+import { MODULES, MODULE_ORDER, ONBOARD_QUESTIONS, EXPANDED_TRAITS, PRODUCT_TIERS } from '../modules';
 
 type Step = 'welcome' | 'symptoms' | 'confirm' | 'depth';
 
 export function Onboarding() {
-  const { completeOnboarding, enabledModules, traits: savedTraits } = useStore();
+  const { completeOnboarding, enabledModules, traits: savedTraits, products } = useStore();
   const rerun = enabledModules.length > 0; // re-running from Settings: skip straight to confirm
   const [step, setStep] = useState<Step>(rerun ? 'confirm' : 'welcome');
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<string[]>(enabledModules);
   const [traits, setTraits] = useState<Record<string, string>>(savedTraits);
+  const [tiers, setTiers] = useState<string[]>(
+    [...new Set(products.map((p) => p.tier).filter((t): t is string => !!t))],
+  );
 
   const toConfirm = () => {
     // The core infers the module set from the plain-language answers…
@@ -22,8 +25,13 @@ export function Onboarding() {
 
   const toggleModule = (m: string) =>
     setSelected((s) => (s.includes(m) ? s.filter((x) => x !== m) : [...s, m]));
+  const toggleTier = (t: string) =>
+    setTiers((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
 
   const depthTraits = EXPANDED_TRAITS.filter((t) => selected.includes(t.module));
+  const wantsProducts = selected.includes('protection');
+  const hasDepth = depthTraits.length > 0 || wantsProducts;
+  const finish = () => completeOnboarding(selected, traits, tiers);
 
   if (step === 'welcome') {
     return (
@@ -94,14 +102,11 @@ export function Onboarding() {
           })}
         </div>
         <div className="footer-actions">
-          <button
-            className="primary block center"
-            onClick={() => (depthTraits.length ? setStep('depth') : completeOnboarding(selected, traits))}
-          >
-            {depthTraits.length ? 'Add a little detail' : 'Start tracking'}
+          <button className="primary block center" onClick={() => (hasDepth ? setStep('depth') : finish())}>
+            {hasDepth ? 'Add a little detail' : 'Start tracking'}
           </button>
-          {depthTraits.length > 0 && (
-            <button className="ghost block center" onClick={() => completeOnboarding(selected, traits)}>
+          {hasDepth && (
+            <button className="ghost block center" onClick={finish}>
               Skip — start tracking
             </button>
           )}
@@ -116,6 +121,21 @@ export function Onboarding() {
       <span className="eyebrow">Optional detail</span>
       <h2>A few extras to sharpen your reports.</h2>
       <p className="lead">All optional — skip any of them.</p>
+
+      {wantsProducts && (
+        <div className="card">
+          <div className="sub" style={{ color: 'var(--text)', marginBottom: 4 }}>Which products do you use?</div>
+          <div className="sub" style={{ marginBottom: 10 }}>Pick any — different products for different times is fine. You can rename them later.</div>
+          <div className="chips">
+            {PRODUCT_TIERS.map((t) => (
+              <button key={t.name} className={tiers.includes(t.name) ? 'selected' : ''} onClick={() => toggleTier(t.name)}>
+                {t.name} · {t.grams}g
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="list">
         {depthTraits.map((t) => (
           <div className="card" key={t.key}>
@@ -131,7 +151,7 @@ export function Onboarding() {
         ))}
       </div>
       <div className="footer-actions">
-        <button className="primary block center" onClick={() => completeOnboarding(selected, traits)}>
+        <button className="primary block center" onClick={finish}>
           Start tracking
         </button>
       </div>

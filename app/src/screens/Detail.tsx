@@ -8,7 +8,7 @@ import {
 } from '@core';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, timeStr, dateStr, durationStr } from '../insights';
+import { voidsOf, leaksOf, nightsOf, changesOf, timeStr, dateStr, durationStr, dayKey } from '../insights';
 
 const Row = ({ left, right }: { left: string; right: string }) => (
   <div className="logline"><span>{left}</span><b>{right}</b></div>
@@ -20,10 +20,12 @@ const ans = (a: Record<string, string>, keys: string[]) =>
 const vol = (ml: number | null) => (ml == null ? 'no volume' : `${ml} ml`);
 
 export function Detail() {
-  const { detail, entries, navigate } = useStore();
+  const { detail, entries, navigate, products } = useStore();
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
+  const changes = changesOf(entries);
+  const productName = (pid: string | null) => products.find((p) => p.id === pid)?.name ?? 'product';
   const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
 
   const back = () => navigate('report');
@@ -34,6 +36,7 @@ export function Detail() {
     : detail === 'bph' ? 'Emptying detail'
     : detail === 'urgency' ? 'Urgency detail'
     : detail === 'leaks' ? 'Leaks'
+    : detail === 'changes' ? 'Protection changes'
     : 'Detail';
 
   let body: React.ReactNode;
@@ -124,6 +127,38 @@ export function Detail() {
           <Row key={l.id} left={timeStr(l.at)} right={ans(l.answers, ['leakSeverity', 'leakTrigger', 'leakAwareness'])} />
         ))}
       </div>
+    );
+  } else if (detail === 'changes') {
+    const changeDays = new Set(changes.map((c) => dayKey(c.at))).size || 1;
+    const byProduct = new Map<string | null, number>();
+    for (const c of changes) byProduct.set(c.productId, (byProduct.get(c.productId) ?? 0) + 1);
+    body = (
+      <>
+        {changes.length > 0 && (
+          <div className="card">
+            <h3>Used per day</h3>
+            <div className="sub">Over {changeDays} day{changeDays > 1 ? 's' : ''} — for restocking.</div>
+            <div className="list" style={{ marginTop: 8 }}>
+              {[...byProduct.entries()].map(([pid, count]) => (
+                <Row key={pid ?? 'unknown'} left={productName(pid)} right={`${(count / changeDays).toFixed(1)} / day`} />
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="list">
+          {changes.length === 0 && <p className="note">No changes logged.</p>}
+          {changes
+            .slice()
+            .sort((a, b) => b.at - a.at)
+            .map((c) => (
+              <Row
+                key={c.id}
+                left={`${timeStr(c.at)} · ${productName(c.productId)}`}
+                right={c.volumeMl != null ? `${c.volumeMl} ml` : c.answers.fullness ?? '—'}
+              />
+            ))}
+        </div>
+      </>
     );
   } else {
     body = <p className="note">Nothing to show.</p>;

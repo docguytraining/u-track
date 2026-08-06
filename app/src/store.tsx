@@ -4,6 +4,7 @@ import {
   composeGateway,
   buildTrendReport,
   buildMeasuredDayReport,
+  nocturiaCount,
   type Surface,
   type TrackingModule,
   type VoidEvent,
@@ -14,7 +15,7 @@ import {
 } from '@core';
 import { MODULES, DEFAULT_DRY_WEIGHTS, type AppQuestion, type ModuleDef } from './modules';
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'morning' | 'report' | 'detail' | 'settings';
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'morning' | 'report' | 'detail' | 'settings';
 
 export interface VoidEntry {
   kind: 'void';
@@ -38,13 +39,25 @@ export interface NightEntry {
   firstVoidVolumeMl: number | null;
   answers: Record<string, string>;
 }
-export type LogEntry = VoidEntry | LeakEntry | NightEntry;
+/** A protection change: urine that went into the product, not the toilet. Carries a
+ * volume (usually weighed) but is NOT a bathroom trip, so it never adds to nocturia. */
+export interface ChangeEntry {
+  kind: 'change';
+  id: string;
+  at: number;
+  productId: string | null;
+  volumeMl: number | null;
+  answers: Record<string, string>;
+}
+export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry;
 
 /** A protection product in the user's library — a trait, set rarely (spec §6.5). */
 export interface Product {
   id: string;
   name: string;
   dryGrams: number;
+  /** The absorbency tier it was created from (for dedup + default weight). */
+  tier?: string;
 }
 
 interface State {
@@ -62,12 +75,14 @@ interface State {
 interface Store extends State {
   navigate: (s: Screen) => void;
   openDetail: (key: string) => void;
-  completeOnboarding: (modules: string[], traits: Record<string, string>) => void;
+  completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
   logVoid: (v: { volumeMl: number | null; answers: Record<string, string> }) => void;
   logLeak: (answers: Record<string, string>) => void;
+  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string> }) => void;
   logNight: (n: Omit<NightEntry, 'kind' | 'id' | 'nightId'>) => void;
   setMeasuredDay: (on: boolean) => void;
-  addProduct: (name: string, dryGrams: number) => void;
+  addProduct: (name: string, dryGrams: number, tier?: string) => void;
+  updateProduct: (id: string, patch: { name?: string; dryGrams?: number }) => void;
   removeProduct: (id: string) => void;
   loadSample: () => void;
   rerunOnboarding: () => void;
@@ -118,7 +133,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store = useMemo<Store>(() => {
     const voids = state.entries.filter((e): e is VoidEntry => e.kind === 'void');
     const nights = state.entries.filter((e): e is NightEntry => e.kind === 'night');
+    const changes = state.entries.filter((e): e is ChangeEntry => e.kind === 'change');
     const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
+    // Changed products carry real urine volume but are not bathroom trips.
+    const changeVoids: VoidEvent[] = changes.map((c) => ({ id: c.id, at: c.at, volumeMl: c.volumeMl }));
+    const volumeEvents = [...coreVoids, ...changeVoids];
 
     // Most recent logged night → the sleep period used for the measured-day report.
     const latestSleep: SleepPeriod | null = nights.length
@@ -141,25 +160,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
 
     const measured =
-      state.measuredDay && latestSleep && coreVoids.length
-        ? buildMeasuredDayReport(coreVoids, latestSleep)
+      state.measuredDay && latestSleep && volumeEvents.length
+        ? // NUV/NPi include absorbed volume; nocturia counts actual voids only.
+          { ...buildMeasuredDayReport(volumeEvents, latestSleep), nocturiaEpisodes: nocturiaCount(coreVoids, latestSleep) }
         : null;
 
     return {
       ...state,
       navigate: (screen) => setState((s) => ({ ...s, screen })),
       openDetail: (key) => setState((s) => ({ ...s, screen: 'detail', detail: key })),
-      completeOnboarding: (modules, traits) =>
+      completeOnboarding: (modules, traits, productTiers) =>
         setState((s) => {
-          // Auto-create a library product for each protection type the user says they
-          // use, seeded with a default weight. They can rename/reweight it in Settings.
-          const wanted = [traits.daytimeProduct, traits.overnightProduct].filter((t) => t && t !== 'None');
-          const have = new Set(s.products.map((p) => p.name));
+          // Auto-create a library product for each absorbency tier the user selected,
+          // seeded with the tier's default weight; deduped by tier so re-running is safe.
+          const have = new Set(s.products.map((p) => p.tier).filter(Boolean));
           const created: Product[] = [];
-          for (const type of wanted) {
-            if (!have.has(type)) {
-              created.push({ id: id(), name: type, dryGrams: DEFAULT_DRY_WEIGHTS[type] ?? 0 });
-              have.add(type);
+          for (const tier of productTiers) {
+            if (!have.has(tier)) {
+              created.push({ id: id(), name: tier, dryGrams: DEFAULT_DRY_WEIGHTS[tier] ?? 0, tier });
+              have.add(tier);
             }
           }
           return { ...s, onboarded: true, enabledModules: modules, traits, products: [...s.products, ...created], screen: 'home' };
@@ -168,6 +187,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: Date.now(), volumeMl, answers }] })),
       logLeak: (answers) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: Date.now(), answers }] })),
+      logChange: ({ productId, volumeMl, answers }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: Date.now(), productId, volumeMl, answers }] })),
       logNight: (n) =>
         setState((s) => {
           const night: NightEntry = { kind: 'night', id: id(), nightId: dayKey(n.bedtime), ...n };
@@ -180,8 +201,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...s, entries: [...s.entries, night, ...firstVoid] };
         }),
       setMeasuredDay: (on) => setState((s) => ({ ...s, measuredDay: on })),
-      addProduct: (name, dryGrams) =>
-        setState((s) => ({ ...s, products: [...s.products, { id: id(), name, dryGrams }] })),
+      addProduct: (name, dryGrams, tier) =>
+        setState((s) => ({ ...s, products: [...s.products, { id: id(), name, dryGrams, tier }] })),
+      updateProduct: (pid, patch) =>
+        setState((s) => ({ ...s, products: s.products.map((p) => (p.id === pid ? { ...p, ...patch } : p)) })),
       removeProduct: (pid) => setState((s) => ({ ...s, products: s.products.filter((p) => p.id !== pid) })),
       // Re-run onboarding: back to the setup flow, keeping logged events (spec §7.1).
       rerunOnboarding: () => setState((s) => ({ ...s, onboarded: false })),

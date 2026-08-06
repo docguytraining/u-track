@@ -1,7 +1,7 @@
 import { useStore } from '../store';
 
 export function Home() {
-  const { measuredDay, setMeasuredDay, navigate } = useStore();
+  const { measuredDay, setMeasuredDay, navigate, enabledModules } = useStore();
 
   return (
     <div className="screen">
@@ -17,6 +17,9 @@ export function Home() {
       {/* Fast path: the things you tap to log, front and center. Nothing to read. */}
       <button className="big center block" onClick={() => navigate('void')}>🚽&nbsp; Void</button>
       <button className="big center block" onClick={() => navigate('leak')}>💧&nbsp; Leak</button>
+      {enabledModules.includes('protection') && (
+        <button className="big center block" onClick={() => navigate('change')}>🩲&nbsp; Change</button>
+      )}
       <button className="big center block" onClick={() => navigate('morning')}>🌙&nbsp; Morning check-in</button>
 
       <div className="spacer-v" />

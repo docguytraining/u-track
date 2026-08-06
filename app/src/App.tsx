@@ -3,6 +3,7 @@ import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
 import { LogVoid } from './screens/LogVoid';
 import { LogLeak } from './screens/LogLeak';
+import { LogChange } from './screens/LogChange';
 import { Morning } from './screens/Morning';
 import { Report } from './screens/Report';
 import { Detail } from './screens/Detail';
@@ -17,6 +18,8 @@ export function App() {
     <LogVoid />
   ) : screen === 'leak' ? (
     <LogLeak />
+  ) : screen === 'change' ? (
+    <LogChange />
   ) : screen === 'morning' ? (
     <Morning />
   ) : screen === 'report' ? (

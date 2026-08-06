@@ -137,6 +137,4 @@ export const EXPANDED_TRAITS: { module: string; key: string; prompt: string; opt
   { module: 'awareness', key: 'warningTime', prompt: 'Once you know, how much warning do you get?', options: ['15+ min', '5–15 min', '<5 min', 'Almost none'] },
   // The general "usually?" version of leak awareness — a trait, where "sometimes" belongs.
   { module: 'awareness', key: 'leakNoticing', prompt: 'When you leak, do you usually notice?', options: ['Usually feel it', 'Sometimes', 'Usually find out after', 'Wake and find it'] },
-  { module: 'protection', key: 'daytimeProduct', prompt: 'Daytime product?', options: ['None', ...PRODUCT_TIERS.map((t) => t.name)] },
-  { module: 'protection', key: 'overnightProduct', prompt: 'Overnight product?', options: ['None', ...PRODUCT_TIERS.map((t) => t.name)] },
 ];

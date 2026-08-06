@@ -1,17 +1,27 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { MODULES } from '../modules';
+import { MODULES, PRODUCT_TIERS } from '../modules';
+import { humanize } from '../insights';
 
 export function Settings() {
-  const { enabledModules, traits, products, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, removeProduct } = useStore();
+  const { enabledModules, traits, products, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct } = useStore();
+  const [tier, setTier] = useState('');
   const [name, setName] = useState('');
   const [dry, setDry] = useState('');
+
+  // Pick a type first → weight (and a starting name) auto-fill → you rename it.
+  const pickTier = (t: { name: string; grams: number }) => {
+    setTier(t.name);
+    setDry(String(t.grams));
+    if (!name.trim()) setName(t.name);
+  };
 
   const add = () => {
     const g = Number(dry);
     if (name.trim() && dry !== '' && !Number.isNaN(g)) {
-      addProduct(name.trim(), g);
+      addProduct(name.trim(), g, tier || undefined);
+      setTier('');
       setName('');
       setDry('');
     }
@@ -37,7 +47,7 @@ export function Settings() {
           <h3>Traits</h3>
           <div className="list" style={{ marginTop: 8 }}>
             {Object.entries(traits).map(([k, v]) => (
-              <div className="logline" key={k}><span>{k}</span><b>{String(v)}</b></div>
+              <div className="logline" key={k}><span>{humanize(k)}</span><b>{String(v)}</b></div>
             ))}
           </div>
         </div>
@@ -46,21 +56,33 @@ export function Settings() {
       {enabledModules.includes('protection') && (
       <div className="card">
         <h3>Protection products</h3>
-        <div className="sub" style={{ marginTop: 2 }}>Dry weights let the app weigh a used product into millilitres.</div>
-        <div className="list" style={{ marginTop: 10 }}>
+        <div className="sub" style={{ marginTop: 2 }}>Rename or adjust weight anytime — dry weights turn a wet product into millilitres.</div>
+
+        <div className="list" style={{ marginTop: 12 }}>
           {products.length === 0 && <div className="sub">No products yet.</div>}
           {products.map((p) => (
-            <div className="logline" key={p.id}>
-              <span><b>{p.name}</b> · dry {p.dryGrams}g</span>
-              <span className="link" onClick={() => removeProduct(p.id)}>Remove</span>
+            <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input className="numinput" style={{ flex: 2 }} value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} />
+              <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" value={p.dryGrams} onChange={(e) => updateProduct(p.id, { dryGrams: Number(e.target.value) })} />
+              <button className="ghost danger" style={{ minHeight: 48, padding: '0 12px' }} onClick={() => removeProduct(p.id)}>✕</button>
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <input className="numinput" style={{ flex: 2 }} placeholder="Product name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="numinput" style={{ flex: 1 }} type="number" inputMode="numeric" placeholder="Dry g" value={dry} onChange={(e) => setDry(e.target.value)} />
+
+        <div className="hr" />
+        <div className="sub" style={{ marginBottom: 8 }}>Add a product — pick a type, then name it:</div>
+        <div className="chips">
+          {PRODUCT_TIERS.map((t) => (
+            <button key={t.name} className={tier === t.name ? 'selected' : ''} onClick={() => pickTier(t)}>
+              {t.name} · {t.grams}g
+            </button>
+          ))}
         </div>
-        <button className="block center" style={{ marginTop: 8 }} onClick={add}>Add product</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <input className="numinput" style={{ flex: 2 }} placeholder="Name it" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" placeholder="Dry g" value={dry} onChange={(e) => setDry(e.target.value)} />
+        </div>
+        <button className="block center" style={{ marginTop: 8 }} onClick={add} disabled={!name.trim() || dry === ''}>Add product</button>
       </div>
       )}
 

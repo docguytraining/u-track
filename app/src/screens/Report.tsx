@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, tally, share } from '../insights';
+import { voidsOf, leaksOf, nightsOf, changesOf, isWetNight, isDryNight, tally, share } from '../insights';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
   return (
@@ -24,6 +24,7 @@ export function Report() {
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
+  const changes = changesOf(entries);
   const has = (m: string) => enabledModules.includes(m);
   const { trend, measured } = reports;
 
@@ -31,6 +32,12 @@ export function Report() {
   const urgencyShare = share(voids, 'urgency', ['Strong', 'Couldn’t wait']);
   const triggers = tally(leaks, 'leakTrigger');
   const topTrigger = Object.entries(triggers).sort((a, b) => b[1] - a[1])[0];
+
+  // Nocturia as an average per tracked night, not a raw total.
+  const avgNocturia = trend.nightsTracked > 0 ? (trend.nocturiaEpisodesTotal / trend.nightsTracked).toFixed(1) : '—';
+  const wetNights = nights.filter(isWetNight).length;
+  const dryNights = nights.filter(isDryNight).length;
+  const absorbedMl = changes.reduce((sum, c) => sum + (c.volumeMl ?? 0), 0);
 
   return (
     <div className="screen">
@@ -49,14 +56,25 @@ export function Report() {
       {(has('nocturia') || has('nightWetting') || measured) && (
         <Card title="Night & polyuria" onClick={() => openDetail('nights')}>
           <div className="grid">
-            <Metric n={trend.nocturiaEpisodesTotal} label="nocturia episodes" />
+            <Metric n={avgNocturia} label="nocturia / night" />
             <Metric
               n={measured?.npi.ratio != null ? `${(measured.npi.ratio * 100).toFixed(0)}%` : '—'}
               label="NPi (needs measured)"
             />
+            {has('nightWetting') && <Metric n={wetNights} label="wet nights" />}
+            {has('nightWetting') && <Metric n={dryNights} label="dry nights" />}
           </div>
           {measured && !measured.complete && <div className="pill warn" style={{ marginTop: 12 }}>{measured.incompleteNote}</div>}
           {measured?.npi.overThreshold && <div className="pill warn" style={{ marginTop: 12 }}>Over 33% threshold</div>}
+        </Card>
+      )}
+
+      {has('protection') && (
+        <Card title="Protection" onClick={() => openDetail('changes')}>
+          <div className="grid">
+            <Metric n={changes.length} label="changes" />
+            <Metric n={absorbedMl > 0 ? `${absorbedMl}` : '—'} label="ml absorbed" />
+          </div>
         </Card>
       )}
 

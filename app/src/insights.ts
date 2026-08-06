@@ -1,9 +1,15 @@
 import type { SleepPeriod } from '@core';
-import type { LogEntry, VoidEntry, LeakEntry, NightEntry } from './store';
+import type { LogEntry, VoidEntry, LeakEntry, NightEntry, ChangeEntry } from './store';
 
 export const voidsOf = (e: readonly LogEntry[]) => e.filter((x): x is VoidEntry => x.kind === 'void');
 export const leaksOf = (e: readonly LogEntry[]) => e.filter((x): x is LeakEntry => x.kind === 'leak');
 export const nightsOf = (e: readonly LogEntry[]) => e.filter((x): x is NightEntry => x.kind === 'night');
+export const changesOf = (e: readonly LogEntry[]) => e.filter((x): x is ChangeEntry => x.kind === 'change');
+
+/** A night reads as wet from the wetting answer or a "woke wet" report. */
+export const isWetNight = (n: NightEntry) =>
+  ['Damp', 'Wet', 'Soaked'].includes(n.answers.wetDry ?? '') || n.answers.howWasNight === 'Woke wet';
+export const isDryNight = (n: NightEntry) => n.answers.wetDry === 'Dry';
 
 export const latestSleep = (nights: NightEntry[]): SleepPeriod | null =>
   nights.length ? nights.reduce((a, b) => (b.rising > a.rising ? b : a)) : null;
@@ -31,8 +37,15 @@ export function share(entries: { answers: Record<string, string> }[], qid: strin
   return { hit, of };
 }
 
+/** camelCase key → readable sentence-case label: "fillingAwareness" → "Filling awareness". */
+export const humanize = (key: string) => {
+  const spaced = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
 export const timeStr = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 export const dateStr = (at: number) => new Date(at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+export const dayKey = (at: number) => new Date(at).toLocaleDateString('en-CA'); // YYYY-MM-DD local
 export const durationStr = (ms: number) => {
   const h = Math.floor(ms / 3_600_000);
   const m = Math.round((ms % 3_600_000) / 60_000);
