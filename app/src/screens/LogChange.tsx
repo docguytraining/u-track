@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { weighedVolumeMl } from '@core';
 import { useStore } from '../store';
 import { Topbar, OptionGroup } from '../ui';
+import { fmtVol } from '../units';
 
 export function LogChange() {
-  const { products, logChange, navigate } = useStore();
+  const { products, units, logChange, navigate } = useStore();
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [wet, setWet] = useState('');
   const [fullness, setFullness] = useState('');
@@ -49,7 +50,7 @@ export function LogChange() {
               onChange={(e) => setWet(e.target.value)}
             />
             {volumeMl != null && (
-              <p className="note">{wet}g − {product!.dryGrams}g = <b style={{ color: 'var(--text)' }}>{volumeMl} ml</b> absorbed</p>
+              <p className="note">{wet}g − {product!.dryGrams}g = <b style={{ color: 'var(--text)' }}>{fmtVol(volumeMl, units)}</b> absorbed</p>
             )}
           </div>
 

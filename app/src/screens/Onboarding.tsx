@@ -10,7 +10,8 @@ export function Onboarding() {
   const rerun = enabledModules.length > 0; // re-running from Settings: skip straight to confirm
   const [step, setStep] = useState<Step>(rerun ? 'confirm' : 'welcome');
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
-  const [selected, setSelected] = useState<string[]>(enabledModules);
+  // Prototype default: everything on, so you deselect what you don't want.
+  const [selected, setSelected] = useState<string[]>(rerun ? enabledModules : [...MODULE_ORDER]);
   const [traits, setTraits] = useState<Record<string, string>>(savedTraits);
   const [tiers, setTiers] = useState<string[]>(
     [...new Set(products.map((p) => p.tier).filter((t): t is string => !!t))],
@@ -44,7 +45,7 @@ export function Onboarding() {
         </p>
         <div className="spacer-v" />
         <p className="note">Prototype · nothing is saved · everything resets on refresh.</p>
-        <button className="primary block center big" onClick={() => setStep('symptoms')}>
+        <button className="primary block center big" onClick={() => setStep('confirm')}>
           Get started
         </button>
       </div>
@@ -83,9 +84,9 @@ export function Onboarding() {
   if (step === 'confirm') {
     return (
       <div className="screen">
-        <span className="eyebrow">Quick setup · 2 of 2</span>
-        <h2>Here’s what I’ll track for you.</h2>
-        <p className="lead">Based on your answers. Tap to add or remove anything.</p>
+        <span className="eyebrow">Setup</span>
+        <h2>What should I track?</h2>
+        <p className="lead">Everything’s on for the prototype — turn off anything you don’t need.</p>
         <div className="list">
           {MODULE_ORDER.map((m) => {
             const def = MODULES[m]!;

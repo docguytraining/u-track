@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { weighedVolumeMl } from '@core';
 import type { AppQuestion } from './modules';
-import type { Product } from './store';
+import { useStore, type Product } from './store';
+import { fmtVol, VOID_SIZES } from './units';
 
 export function Topbar({ title, onBack, right }: { title: string; onBack?: () => void; right?: React.ReactNode }) {
   return (
@@ -55,17 +56,12 @@ export function VolumeField({
   onChange: (v: number | null) => void;
   products?: Product[];
 }) {
+  const { units } = useStore();
   const [mode, setMode] = useState<'quick' | 'weigh'>('quick');
   const [productId, setProductId] = useState('');
   const [wet, setWet] = useState('');
 
-  const sizes: [string, number | null][] = [
-    ['Small', 100],
-    ['Medium', 250],
-    ['Large', 400],
-    ['Skip', null],
-  ];
-
+  const sizes = VOID_SIZES[units];
   const product = products.find((p) => p.id === productId);
   const recompute = (pid: string, wetStr: string) => {
     const p = products.find((x) => x.id === pid);
@@ -83,7 +79,7 @@ export function VolumeField({
             {sizes.map(([label, ml]) => (
               <button key={label} className={valueMl === ml ? 'selected' : ''} onClick={() => onChange(ml)}>
                 {label}
-                {ml != null ? ` · ${ml}ml` : ''}
+                {ml != null ? ` · ${fmtVol(ml, units)}` : ''}
               </button>
             ))}
           </div>
@@ -112,7 +108,7 @@ export function VolumeField({
           />
           {product && wet !== '' && valueMl != null && (
             <p className="note">
-              {wet}g − {product.dryGrams}g = <b style={{ color: 'var(--text)' }}>{valueMl} ml</b>
+              {wet}g − {product.dryGrams}g = <b style={{ color: 'var(--text)' }}>{fmtVol(valueMl, units)}</b>
             </p>
           )}
           <button className="ghost block center" onClick={() => setMode('quick')}>

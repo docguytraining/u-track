@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, isWetNight, isDryNight, tally, share } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
+import { fmtVol } from '../units';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
   return (
@@ -21,7 +22,7 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 );
 
 export function Report() {
-  const { entries, enabledModules, drinkTypes, reports, navigate, openDetail, loadSample } = useStore();
+  const { entries, enabledModules, drinkTypes, units, reports, navigate, openDetail, loadSample } = useStore();
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
@@ -64,8 +65,8 @@ export function Report() {
 
       <Card title="Fluids" onClick={() => openDetail('drinks')}>
         <div className="grid">
-          <Metric n={intakeMl > 0 ? `${intakeMl}` : '—'} label="ml today" />
-          <Metric n={eveningMl > 0 ? `${eveningMl}` : '—'} label="ml after 6pm" />
+          <Metric n={intakeMl > 0 ? fmtVol(intakeMl, units) : '—'} label="intake today" />
+          <Metric n={eveningMl > 0 ? fmtVol(eveningMl, units) : '—'} label="after 6pm" />
           {showCaffeine && <Metric n={caffeineN} label="caffeine drinks" />}
           {showAlcohol && <Metric n={alcoholN} label="alcohol drinks" />}
         </div>
@@ -91,7 +92,7 @@ export function Report() {
         <Card title="Protection" onClick={() => openDetail('changes')}>
           <div className="grid">
             <Metric n={changes.length} label="changes" />
-            <Metric n={absorbedMl > 0 ? `${absorbedMl}` : '—'} label="ml absorbed" />
+            <Metric n={absorbedMl > 0 ? fmtVol(absorbedMl, units) : '—'} label="absorbed" />
           </div>
         </Card>
       )}

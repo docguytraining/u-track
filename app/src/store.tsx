@@ -14,6 +14,7 @@ import {
   type TrendReport,
 } from '@core';
 import { MODULES, DEFAULT_DRY_WEIGHTS, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
+import type { Units } from './units';
 
 export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'detail' | 'settings';
 
@@ -75,6 +76,8 @@ interface State {
   products: Product[];
   /** Drink types offered when logging fluid — user-pruned in Settings. */
   drinkTypes: string[];
+  /** Display/input units for volumes. Storage is always ml. */
+  units: Units;
   entries: LogEntry[];
   measuredDay: boolean;
   screen: Screen;
@@ -92,6 +95,7 @@ interface Store extends State {
   logDrink: (d: { type: string; volumeMl: number | null }) => void;
   removeDrinkType: (name: string) => void;
   addDrinkType: (name: string) => void;
+  setUnits: (u: Units) => void;
   logNight: (n: Omit<NightEntry, 'kind' | 'id' | 'nightId'>) => void;
   setMeasuredDay: (on: boolean) => void;
   addProduct: (name: string, dryGrams: number, tier?: string) => void;
@@ -121,6 +125,7 @@ const initial: State = {
   // library (and the "weigh a product" option) stays hidden until they add one.
   products: [],
   drinkTypes: DEFAULT_DRINK_NAMES,
+  units: 'oz', // freedom units by default; toggle in Settings
   entries: [],
   measuredDay: false,
   screen: 'onboarding',
@@ -207,6 +212,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: Date.now(), type, volumeMl }] })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
       addDrinkType: (name) => setState((s) => (s.drinkTypes.includes(name) ? s : { ...s, drinkTypes: [...s.drinkTypes, name] })),
+      setUnits: (u) => setState((s) => ({ ...s, units: u })),
       logNight: (n) =>
         setState((s) => {
           const night: NightEntry = { kind: 'night', id: id(), nightId: dayKey(n.bedtime), ...n };

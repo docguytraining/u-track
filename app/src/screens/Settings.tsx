@@ -5,7 +5,7 @@ import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
 
 export function Settings() {
-  const { enabledModules, traits, products, drinkTypes, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType } = useStore();
+  const { enabledModules, traits, products, drinkTypes, units, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits } = useStore();
   const removedDrinks = DEFAULT_DRINK_NAMES.filter((d) => !drinkTypes.includes(d));
   const [tier, setTier] = useState('');
   const [name, setName] = useState('');
@@ -86,6 +86,15 @@ export function Settings() {
         <button className="block center" style={{ marginTop: 8 }} onClick={add} disabled={!name.trim() || dry === ''}>Add product</button>
       </div>
       )}
+
+      <div className="card">
+        <h3>Units</h3>
+        <div className="sub" style={{ marginTop: 2 }}>How volumes show and enter. Stored the same either way.</div>
+        <div className="chips" style={{ marginTop: 10 }}>
+          <button className={units === 'oz' ? 'selected' : ''} onClick={() => setUnits('oz')}>Ounces (oz)</button>
+          <button className={units === 'ml' ? 'selected' : ''} onClick={() => setUnits('ml')}>Millilitres (ml)</button>
+        </div>
+      </div>
 
       <div className="card">
         <h3>Drinks</h3>
