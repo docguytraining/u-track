@@ -8,9 +8,9 @@
  * distinct types and only events flow into event-series statistics.
  *
  * NOTE (design, open to revision): this module and its shapes are new (no scaffold
- * stub). `applyOnboarding` covers the §7.1 rule that re-running onboarding edits
- * the profile without wiping events; the question→module inference of test §9.18
- * is intentionally left out — its wording is a clinical/product decision for you.
+ * stub). The question→module inference lives in ../onboarding/onboarding.ts; this
+ * file owns the profile shape and the `applyOnboarding` merge that re-running
+ * onboarding uses to edit the profile without ever wiping events (spec §7.1).
  */
 
 /** A timestamped observation drawn from events. */
@@ -25,10 +25,20 @@ export type StoredRecord =
   | { kind: 'event'; at: number; value: number };
 
 export interface Profile {
+  /** Ids of the enabled tracking modules (spec §5.4). */
+  enabledModules: readonly string[];
   /** Rarely-answered settings. */
   traits: Record<string, unknown>;
   /** Append-only observations. */
   events: readonly StoredRecord[];
+}
+
+/** What onboarding writes back: the confirmed module set and/or trait answers. */
+export interface OnboardingUpdate {
+  /** The confirmed enabled-module set. Replaces the current set when present. */
+  enabledModules?: readonly string[];
+  /** Trait answers to merge into the profile. */
+  traits?: Record<string, unknown>;
 }
 
 /** Extract only the event observations — traits are structurally excluded. */
@@ -48,12 +58,15 @@ export function meanObservation(observations: readonly Observation[]): number | 
 }
 
 /**
- * Re-running onboarding merges answered traits into the profile and leaves logged
- * events completely untouched (spec §7.1). Pure — returns a new profile.
+ * Apply an onboarding pass: set the confirmed modules (if given) and merge trait
+ * answers, leaving logged events completely untouched (spec §7.1). Pure — returns
+ * a new profile and never mutates the input. Re-running onboarding is just calling
+ * this again, so events survive every re-run.
  */
-export function applyOnboarding(profile: Profile, answers: Record<string, unknown>): Profile {
+export function applyOnboarding(profile: Profile, update: OnboardingUpdate): Profile {
   return {
-    traits: { ...profile.traits, ...answers },
+    enabledModules: update.enabledModules ?? profile.enabledModules,
+    traits: update.traits ? { ...profile.traits, ...update.traits } : profile.traits,
     events: profile.events,
   };
 }
