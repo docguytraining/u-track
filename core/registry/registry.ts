@@ -21,18 +21,53 @@ export interface TrackingModule {
 
 export const CORE_BUDGET = 2;
 
+/**
+ * All questions the ENABLED modules contribute to a surface, deduped by id.
+ * When two modules own the same question id, the higher-priority instance wins
+ * (spec §5.4 dedup). Disabled modules never appear.
+ */
+function enabledQuestions(
+  modules: readonly TrackingModule[],
+  surface: Surface,
+): QuestionDef[] {
+  const byId = new Map<string, QuestionDef>();
+  for (const m of modules) {
+    if (!m.enabled) continue;
+    for (const question of m.questions) {
+      if (question.surface !== surface) continue;
+      const existing = byId.get(question.id);
+      if (!existing || question.priority > existing.priority) {
+        byId.set(question.id, question);
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Highest priority first; id as a stable tiebreaker so composition is deterministic. */
+function byPriorityDesc(a: QuestionDef, b: QuestionDef): number {
+  return b.priority - a.priority || a.id.localeCompare(b.id);
+}
+
 /** Compose the core questions for a surface from the enabled modules (spec §5.4). */
 export function composeCore(
-  _modules: readonly TrackingModule[],
-  _surface: Surface,
+  modules: readonly TrackingModule[],
+  surface: Surface,
 ): QuestionDef[] {
-  throw new Error('not implemented');
+  // Only coreEligible questions compete for the budget; empty core is valid (pure tap).
+  return enabledQuestions(modules, surface)
+    .filter((question) => question.coreEligible)
+    .sort(byPriorityDesc)
+    .slice(0, CORE_BUDGET);
 }
 
 /** Everything enabled for a surface that didn't make core → the "Track anything else?" gateway. */
 export function composeGateway(
-  _modules: readonly TrackingModule[],
-  _surface: Surface,
+  modules: readonly TrackingModule[],
+  surface: Surface,
 ): QuestionDef[] {
-  throw new Error('not implemented');
+  const inCore = new Set(composeCore(modules, surface).map((question) => question.id));
+  return enabledQuestions(modules, surface)
+    .filter((question) => !inCore.has(question.id))
+    .sort(byPriorityDesc);
 }
