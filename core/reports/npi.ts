@@ -3,7 +3,7 @@
  * NPi = NUV / 24h voided volume. Withheld (null) unless the contributing voids are
  * genuinely measured; flagged against the 0.33 threshold WITHOUT emitting a diagnosis.
  */
-import type { VoidEvent, SleepPeriod } from '../time/night';
+import { nocturnalUrineVolume, type VoidEvent, type SleepPeriod } from '../time/night';
 
 export interface NpiResult {
   ratio: number | null;
@@ -14,9 +14,24 @@ export interface NpiResult {
 }
 
 export function nocturnalPolyuriaIndex(
-  _voids: readonly VoidEvent[],
-  _sleep: SleepPeriod,
-  _threshold = 0.33,
+  voids: readonly VoidEvent[],
+  sleep: SleepPeriod,
+  threshold = 0.33,
 ): NpiResult {
-  throw new Error('not implemented');
+  // Both numerator (NUV) and denominator (24h voided volume) must be genuinely
+  // measured. If any void lacks a real volume the ratio is withheld, never guessed.
+  const complete = voids.length > 0 && voids.every((v) => v.volumeMl != null);
+  if (!complete) {
+    return { ratio: null, complete: false, overThreshold: null };
+  }
+
+  const total24h = voids.reduce((sum, v) => sum + (v.volumeMl ?? 0), 0);
+  const nuv = nocturnalUrineVolume(voids, sleep);
+  if (total24h <= 0 || nuv == null) {
+    return { ratio: null, complete, overThreshold: null };
+  }
+
+  const ratio = nuv / total24h;
+  // A flag against the (age-dependent, caller-supplied) threshold — not a diagnosis.
+  return { ratio, complete, overThreshold: ratio > threshold };
 }
