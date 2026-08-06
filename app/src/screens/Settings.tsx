@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { MODULES, PRODUCT_TIERS } from '../modules';
+import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
 
 export function Settings() {
-  const { enabledModules, traits, products, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct } = useStore();
+  const { enabledModules, traits, products, drinkTypes, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType } = useStore();
+  const removedDrinks = DEFAULT_DRINK_NAMES.filter((d) => !drinkTypes.includes(d));
   const [tier, setTier] = useState('');
   const [name, setName] = useState('');
   const [dry, setDry] = useState('');
@@ -85,6 +86,26 @@ export function Settings() {
         <button className="block center" style={{ marginTop: 8 }} onClick={add} disabled={!name.trim() || dry === ''}>Add product</button>
       </div>
       )}
+
+      <div className="card">
+        <h3>Drinks</h3>
+        <div className="sub" style={{ marginTop: 2 }}>Tap to remove types you never drink — they won’t be offered when logging.</div>
+        <div className="chips" style={{ marginTop: 10 }}>
+          {drinkTypes.map((d) => (
+            <button key={d} className="selected" onClick={() => removeDrinkType(d)}>{d} ✕</button>
+          ))}
+        </div>
+        {removedDrinks.length > 0 && (
+          <>
+            <div className="sub" style={{ marginTop: 12, marginBottom: 6 }}>Removed — tap to add back:</div>
+            <div className="chips">
+              {removedDrinks.map((d) => (
+                <button key={d} className="ghost" onClick={() => addDrinkType(d)}>+ {d}</button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="card">
         <h3>This session</h3>

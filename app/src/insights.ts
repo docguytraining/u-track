@@ -1,10 +1,11 @@
 import type { SleepPeriod } from '@core';
-import type { LogEntry, VoidEntry, LeakEntry, NightEntry, ChangeEntry } from './store';
+import type { LogEntry, VoidEntry, LeakEntry, NightEntry, ChangeEntry, DrinkEntry } from './store';
 
 export const voidsOf = (e: readonly LogEntry[]) => e.filter((x): x is VoidEntry => x.kind === 'void');
 export const leaksOf = (e: readonly LogEntry[]) => e.filter((x): x is LeakEntry => x.kind === 'leak');
 export const nightsOf = (e: readonly LogEntry[]) => e.filter((x): x is NightEntry => x.kind === 'night');
 export const changesOf = (e: readonly LogEntry[]) => e.filter((x): x is ChangeEntry => x.kind === 'change');
+export const drinksOf = (e: readonly LogEntry[]) => e.filter((x): x is DrinkEntry => x.kind === 'drink');
 
 /** A night reads as wet from the wetting answer or a "woke wet" report. */
 export const isWetNight = (n: NightEntry) =>

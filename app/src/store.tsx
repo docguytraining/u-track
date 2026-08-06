@@ -13,9 +13,9 @@ import {
   type MeasuredDayReport,
   type TrendReport,
 } from '@core';
-import { MODULES, DEFAULT_DRY_WEIGHTS, type AppQuestion, type ModuleDef } from './modules';
+import { MODULES, DEFAULT_DRY_WEIGHTS, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'morning' | 'report' | 'detail' | 'settings';
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'detail' | 'settings';
 
 export interface VoidEntry {
   kind: 'void';
@@ -49,7 +49,15 @@ export interface ChangeEntry {
   volumeMl: number | null;
   answers: Record<string, string>;
 }
-export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry;
+/** A drink — fluid intake, the input side of the frequency-volume chart. */
+export interface DrinkEntry {
+  kind: 'drink';
+  id: string;
+  at: number;
+  type: string;
+  volumeMl: number | null;
+}
+export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry | DrinkEntry;
 
 /** A protection product in the user's library — a trait, set rarely (spec §6.5). */
 export interface Product {
@@ -65,6 +73,8 @@ interface State {
   enabledModules: string[];
   traits: Record<string, string>;
   products: Product[];
+  /** Drink types offered when logging fluid — user-pruned in Settings. */
+  drinkTypes: string[];
   entries: LogEntry[];
   measuredDay: boolean;
   screen: Screen;
@@ -79,6 +89,9 @@ interface Store extends State {
   logVoid: (v: { volumeMl: number | null; answers: Record<string, string> }) => void;
   logLeak: (answers: Record<string, string>) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string> }) => void;
+  logDrink: (d: { type: string; volumeMl: number | null }) => void;
+  removeDrinkType: (name: string) => void;
+  addDrinkType: (name: string) => void;
   logNight: (n: Omit<NightEntry, 'kind' | 'id' | 'nightId'>) => void;
   setMeasuredDay: (on: boolean) => void;
   addProduct: (name: string, dryGrams: number, tier?: string) => void;
@@ -107,6 +120,7 @@ const initial: State = {
   // Empty by default — weighing only applies to people who use protection, so the
   // library (and the "weigh a product" option) stays hidden until they add one.
   products: [],
+  drinkTypes: DEFAULT_DRINK_NAMES,
   entries: [],
   measuredDay: false,
   screen: 'onboarding',
@@ -189,6 +203,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: Date.now(), answers }] })),
       logChange: ({ productId, volumeMl, answers }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: Date.now(), productId, volumeMl, answers }] })),
+      logDrink: ({ type, volumeMl }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: Date.now(), type, volumeMl }] })),
+      removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
+      addDrinkType: (name) => setState((s) => (s.drinkTypes.includes(name) ? s : { ...s, drinkTypes: [...s.drinkTypes, name] })),
       logNight: (n) =>
         setState((s) => {
           const night: NightEntry = { kind: 'night', id: id(), nightId: dayKey(n.bedtime), ...n };

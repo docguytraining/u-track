@@ -4,6 +4,7 @@ import { Home } from './screens/Home';
 import { LogVoid } from './screens/LogVoid';
 import { LogLeak } from './screens/LogLeak';
 import { LogChange } from './screens/LogChange';
+import { LogDrink } from './screens/LogDrink';
 import { Morning } from './screens/Morning';
 import { Report } from './screens/Report';
 import { Detail } from './screens/Detail';
@@ -20,6 +21,8 @@ export function App() {
     <LogLeak />
   ) : screen === 'change' ? (
     <LogChange />
+  ) : screen === 'drink' ? (
+    <LogDrink />
   ) : screen === 'morning' ? (
     <Morning />
   ) : screen === 'report' ? (

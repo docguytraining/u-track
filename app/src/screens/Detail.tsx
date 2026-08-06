@@ -8,7 +8,7 @@ import {
 } from '@core';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, changesOf, timeStr, dateStr, durationStr, dayKey } from '../insights';
+import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, timeStr, dateStr, durationStr, dayKey } from '../insights';
 
 const Row = ({ left, right }: { left: string; right: string }) => (
   <div className="logline"><span>{left}</span><b>{right}</b></div>
@@ -25,6 +25,7 @@ export function Detail() {
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
   const changes = changesOf(entries);
+  const drinks = drinksOf(entries);
   const productName = (pid: string | null) => products.find((p) => p.id === pid)?.name ?? 'product';
   const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
 
@@ -37,6 +38,7 @@ export function Detail() {
     : detail === 'urgency' ? 'Urgency detail'
     : detail === 'leaks' ? 'Leaks'
     : detail === 'changes' ? 'Protection changes'
+    : detail === 'drinks' ? 'Fluid intake'
     : 'Detail';
 
   let body: React.ReactNode;
@@ -159,6 +161,18 @@ export function Detail() {
             ))}
         </div>
       </>
+    );
+  } else if (detail === 'drinks') {
+    body = (
+      <div className="list">
+        {drinks.length === 0 && <p className="note">No drinks logged.</p>}
+        {drinks
+          .slice()
+          .sort((a, b) => b.at - a.at)
+          .map((d) => (
+            <Row key={d.id} left={`${timeStr(d.at)} · ${d.type}`} right={d.volumeMl != null ? `${d.volumeMl} ml` : '—'} />
+          ))}
+      </div>
     );
   } else {
     body = <p className="note">Nothing to show.</p>;

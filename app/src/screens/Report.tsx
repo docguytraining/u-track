@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, changesOf, isWetNight, isDryNight, tally, share } from '../insights';
+import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, isWetNight, isDryNight, tally, share } from '../insights';
+import { isCaffeine, isAlcohol } from '../modules';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
   return (
@@ -20,12 +21,20 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 );
 
 export function Report() {
-  const { entries, enabledModules, reports, navigate, openDetail, loadSample } = useStore();
+  const { entries, enabledModules, drinkTypes, reports, navigate, openDetail, loadSample } = useStore();
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
   const changes = changesOf(entries);
+  const drinks = drinksOf(entries);
   const has = (m: string) => enabledModules.includes(m);
+
+  const intakeMl = drinks.reduce((s, d) => s + (d.volumeMl ?? 0), 0);
+  const eveningMl = drinks.filter((d) => new Date(d.at).getHours() >= 18).reduce((s, d) => s + (d.volumeMl ?? 0), 0);
+  const caffeineN = drinks.filter((d) => isCaffeine(d.type)).length;
+  const alcoholN = drinks.filter((d) => isAlcohol(d.type)).length;
+  const showCaffeine = drinkTypes.some(isCaffeine);
+  const showAlcohol = drinkTypes.some(isAlcohol);
   const { trend, measured } = reports;
 
   const streamShare = share(voids, 'stream', ['Weak', 'Dribble']);
@@ -50,6 +59,15 @@ export function Report() {
           <Metric n={leaks.length} label="leaks" />
           <Metric n={nights.length} label="nights" />
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
+        </div>
+      </Card>
+
+      <Card title="Fluids" onClick={() => openDetail('drinks')}>
+        <div className="grid">
+          <Metric n={intakeMl > 0 ? `${intakeMl}` : '—'} label="ml today" />
+          <Metric n={eveningMl > 0 ? `${eveningMl}` : '—'} label="ml after 6pm" />
+          {showCaffeine && <Metric n={caffeineN} label="caffeine drinks" />}
+          {showAlcohol && <Metric n={alcoholN} label="alcohol drinks" />}
         </div>
       </Card>
 
