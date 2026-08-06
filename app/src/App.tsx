@@ -7,6 +7,7 @@ import { LogChange } from './screens/LogChange';
 import { LogDrink } from './screens/LogDrink';
 import { Morning } from './screens/Morning';
 import { Report } from './screens/Report';
+import { Chart } from './screens/Chart';
 import { Detail } from './screens/Detail';
 import { Settings } from './screens/Settings';
 
@@ -27,6 +28,8 @@ export function App() {
     <Morning />
   ) : screen === 'report' ? (
     <Report />
+  ) : screen === 'chart' ? (
+    <Chart />
   ) : screen === 'detail' ? (
     <Detail />
   ) : screen === 'settings' ? (

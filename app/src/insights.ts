@@ -44,6 +44,30 @@ export const humanize = (key: string) => {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 };
 
+/** One calendar day's entries, for the frequency-volume chart and multi-day trends. */
+export interface DayGroup {
+  day: string; // YYYY-MM-DD (local)
+  voids: VoidEntry[];
+  drinks: DrinkEntry[];
+  changes: ChangeEntry[];
+  night?: NightEntry;
+}
+
+/** Group all entries by calendar day (nights keyed to the day they end), newest first. */
+export function groupByDay(entries: readonly LogEntry[]): DayGroup[] {
+  const byDay = new Map<string, DayGroup>();
+  const get = (day: string): DayGroup =>
+    byDay.get(day) ?? byDay.set(day, { day, voids: [], drinks: [], changes: [] }).get(day)!;
+  for (const e of entries) {
+    if (e.kind === 'void') get(dayKeyOf(e.at)).voids.push(e);
+    else if (e.kind === 'drink') get(dayKeyOf(e.at)).drinks.push(e);
+    else if (e.kind === 'change') get(dayKeyOf(e.at)).changes.push(e);
+    else if (e.kind === 'night') get(dayKeyOf(e.rising)).night = e;
+  }
+  return [...byDay.values()].sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+const dayKeyOf = (at: number) => new Date(at).toLocaleDateString('en-CA');
+
 export const timeStr = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 export const dateStr = (at: number) => new Date(at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 export const dayKey = (at: number) => new Date(at).toLocaleDateString('en-CA'); // YYYY-MM-DD local

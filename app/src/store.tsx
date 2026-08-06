@@ -16,7 +16,7 @@ import {
 import { MODULES, DEFAULT_DRY_WEIGHTS, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
 import type { Units } from './units';
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'detail' | 'settings';
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings';
 
 export interface VoidEntry {
   kind: 'void';

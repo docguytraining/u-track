@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, isWetNight, isDryNight, tally, share } from '../insights';
+import { voidedVolumeStats } from '@core';
+import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 
@@ -49,10 +50,30 @@ export function Report() {
   const dryNights = nights.filter(isDryNight).length;
   const absorbedMl = changes.reduce((sum, c) => sum + (c.volumeMl ?? 0), 0);
 
+  const cap = voidedVolumeStats(voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl })));
+  const qualityPct = cap.voids ? Math.round((cap.measured / cap.voids) * 100) : 0;
+  const measuredDays = groupByDay(entries).filter((d) => d.night && d.voids.length > 0 && d.voids.every((v) => v.volumeMl != null)).length;
+
   return (
     <div className="screen">
       <Topbar title="Report" onBack={() => navigate('home')} />
       <p className="lead">Tap any card to see the data behind it.</p>
+
+      <button className="primary block center" onClick={() => navigate('chart')}>
+        📄 Frequency-volume chart · {measuredDays} of 3 measured days
+      </button>
+      {cap.voids > 0 && (
+        <div className={qualityPct === 100 ? 'pill ok' : 'pill warn'} style={{ alignSelf: 'flex-start' }}>
+          Data quality: {cap.measured} of {cap.voids} voids measured ({qualityPct}%)
+        </div>
+      )}
+
+      <Card title="Bladder capacity" onClick={() => navigate('chart')}>
+        <div className="grid">
+          <Metric n={fmtVol(cap.maxMl, units)} label="functional (max void)" />
+          <Metric n={fmtVol(cap.averageMl, units)} label="average void" />
+        </div>
+      </Card>
 
       <Card title="Activity" onClick={() => openDetail('log')}>
         <div className="grid">

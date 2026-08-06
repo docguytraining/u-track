@@ -43,10 +43,18 @@ export function Onboarding() {
           A few quick questions and the app turns on just what fits you — nothing more. You can
           change it anytime in Settings. Even a little tracking is worth showing a doctor.
         </p>
+        <div className="card" style={{ marginTop: 4 }}>
+          <b>Not a medical device.</b>
+          <div className="sub" style={{ marginTop: 4 }}>
+            u-track helps you record and share bladder-diary data with your clinician. It does not
+            diagnose or treat, and it doesn’t replace medical advice.
+          </div>
+        </div>
         <div className="spacer-v" />
         <p className="note">Prototype · nothing is saved · everything resets on refresh.</p>
+        <p className="note">By continuing, you acknowledge the above and consent to entering health data.</p>
         <button className="primary block center big" onClick={() => setStep('confirm')}>
-          Get started
+          I understand — get started
         </button>
       </div>
     );
