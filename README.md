@@ -20,24 +20,32 @@ npm run typecheck
 
 ```
 core/
-  time/night.ts        night-boundary model (spec §4)   ← implemented first
-  time/night.test.ts   Group A tests (spec §9.A), incl. both DST cases
-  reports/npi.ts       nocturnal polyuria index (spec §4.1, §9.B)
-  volume/volume.ts     volume + quality (spec §5.3, §9.C)
-  registry/registry.ts module registry + profile-composed core (spec §5.4, §9.D)
+  time/night.ts        night-boundary model (spec §4)
+  reports/npi.ts       nocturnal polyuria index (spec §4.1)
+  reports/report.ts    measured-day + everyday trend reports (spec §3.2)
+  volume/volume.ts     volume + quality (spec §5.3)
+  registry/registry.ts module registry + profile-composed core (spec §5.4)
+  profile/profile.ts   traits vs events + onboarding merge (spec §5.1)
+  *.test.ts            co-located tests for each module
 docs/spec.md           the full design spec
 ```
 
 ## TDD state
 
-Every core function currently throws `not implemented`, so the suite is **red on
-purpose**. The order of work follows the spec's test plan (§9):
+The pure-logic core is **green** — 24 tests across Groups A–F pass (`npm test`),
+`npm run typecheck` clean. Built test-red → implement-green in spec §9 order:
 
-1. **Group A — night boundary** (tests written). Implement `core/time/night.ts` to green.
-2. Group B — NPi. 3. Group C — volume/quality. 4. Group D — registry composition.
-5. Group E — report degradation. 6. Group F — traits vs events.
+1. **Group A — night boundary** ✅ (incl. both DST cases)
+2. **Group B — NPi** ✅  3. **Group C — volume/quality** ✅  4. **Group D — registry** ✅
+5. **Group E — report degradation** ✅  6. **Group F — traits vs events** ✅
 
-Write the test red, implement to green, then move on.
+**Not yet done:** §9.18 — onboarding question→module inference. The rule (re-running
+onboarding edits the profile without wiping events) is implemented in
+`profile/applyOnboarding`, but the actual onboarding *questions* and which modules
+each answer enables are a clinical/product decision left open.
+
+Reports (`report.ts`) and the profile model (`profile.ts`) had no scaffold stubs, so
+their shapes are first-pass design choices (flagged in-file) — review before building UI on them.
 
 ## Continuing locally
 
