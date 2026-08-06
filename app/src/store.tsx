@@ -14,7 +14,7 @@ import {
 } from '@core';
 import { MODULES, type AppQuestion, type ModuleDef } from './modules';
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'morning' | 'report' | 'settings';
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'morning' | 'report' | 'detail' | 'settings';
 
 export interface VoidEntry {
   kind: 'void';
@@ -55,10 +55,13 @@ interface State {
   entries: LogEntry[];
   measuredDay: boolean;
   screen: Screen;
+  /** Which drill-down the detail screen is showing. */
+  detail: string | null;
 }
 
 interface Store extends State {
   navigate: (s: Screen) => void;
+  openDetail: (key: string) => void;
   completeOnboarding: (modules: string[], traits: Record<string, string>) => void;
   logVoid: (v: { volumeMl: number | null; answers: Record<string, string> }) => void;
   logLeak: (answers: Record<string, string>) => void;
@@ -91,6 +94,7 @@ const initial: State = {
   entries: [],
   measuredDay: false,
   screen: 'onboarding',
+  detail: null,
 };
 
 let seq = 0;
@@ -143,6 +147,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return {
       ...state,
       navigate: (screen) => setState((s) => ({ ...s, screen })),
+      openDetail: (key) => setState((s) => ({ ...s, screen: 'detail', detail: key })),
       completeOnboarding: (modules, traits) =>
         setState((s) => ({ ...s, onboarded: true, enabledModules: modules, traits, screen: 'home' })),
       logVoid: ({ volumeMl, answers }) =>

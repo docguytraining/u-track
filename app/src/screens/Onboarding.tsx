@@ -28,7 +28,7 @@ export function Onboarding() {
   if (step === 'welcome') {
     return (
       <div className="screen">
-        <span className="eyebrow">Bladder diary</span>
+        <span className="eyebrow">u-track</span>
         <h2>Let’s set up your tracking.</h2>
         <p className="lead">
           A few quick questions and the app turns on just what fits you — nothing more. You can

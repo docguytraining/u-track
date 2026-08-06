@@ -1,86 +1,86 @@
+import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
+import { voidsOf, leaksOf, nightsOf, tally, share } from '../insights';
+
+function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button className="card block" onClick={onClick}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>{title}</h3>
+        <span style={{ color: 'var(--muted)' }}>›</span>
+      </div>
+      <div style={{ marginTop: 10 }}>{children}</div>
+    </button>
+  );
+}
+
+const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
+  <div><div className="stat"><span className="n">{n}</span></div><div className="sub">{label}</div></div>
+);
 
 export function Report() {
-  const { reports, navigate, loadSample, measuredDay } = useStore();
+  const { entries, enabledModules, reports, navigate, openDetail, loadSample } = useStore();
+  const voids = voidsOf(entries);
+  const leaks = leaksOf(entries);
+  const nights = nightsOf(entries);
+  const has = (m: string) => enabledModules.includes(m);
   const { trend, measured } = reports;
+
+  const streamShare = share(voids, 'stream', ['Weak', 'Dribble']);
+  const urgencyShare = share(voids, 'urgency', ['Strong', 'Couldn’t wait']);
+  const triggers = tally(leaks, 'leakTrigger');
+  const topTrigger = Object.entries(triggers).sort((a, b) => b[1] - a[1])[0];
 
   return (
     <div className="screen">
       <Topbar title="Report" onBack={() => navigate('home')} />
-      <p className="lead">What your data honestly supports — counts always, the precise numbers only when earned.</p>
+      <p className="lead">Tap any card to see the data behind it.</p>
 
-      <div className="card">
-        <h3>Everyday trend</h3>
-        <div className="grid" style={{ marginTop: 12 }}>
-          <div>
-            <div className="sub">Days tracked</div>
-            <div className="stat"><span className="n">{trend.days}</span></div>
-          </div>
-          <div>
-            <div className="sub">Voids / day</div>
-            <div className="stat"><span className="n">{trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'}</span></div>
-          </div>
-          <div>
-            <div className="sub">Nights tracked</div>
-            <div className="stat"><span className="n">{trend.nightsTracked}</span></div>
-          </div>
-          <div>
-            <div className="sub">Nocturia episodes</div>
-            <div className="stat"><span className="n">{trend.nocturiaEpisodesTotal}</span></div>
-          </div>
+      <Card title="Activity" onClick={() => openDetail('log')}>
+        <div className="grid">
+          <Metric n={voids.length} label="voids" />
+          <Metric n={leaks.length} label="leaks" />
+          <Metric n={nights.length} label="nights" />
+          <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
         </div>
-        <div style={{ marginTop: 12 }}>
-          {trend.npiAvailable ? (
-            <span className="pill ok">NPi available</span>
-          ) : (
-            <span className="pill muted">NPi needs a full measured day</span>
-          )}
-        </div>
-      </div>
+      </Card>
 
-      <div className="card">
-        <h3>Measured day</h3>
-        {!measured ? (
-          <p className="sub" style={{ marginTop: 8 }}>
-            {measuredDay
-              ? 'Log a night and some voids with volumes, and this fills in.'
-              : 'Start a measured day (and log the night) to compute the nocturnal polyuria index.'}
-          </p>
-        ) : (
-          <>
-            <div className="list" style={{ marginTop: 8 }}>
-              <div className="logline"><span>Nocturia episodes</span><b>{measured.nocturiaEpisodes}</b></div>
-              <div className="logline"><span>Nocturnal urine volume</span><b>{measured.nuvMl == null ? 'withheld' : `${measured.nuvMl} ml`}</b></div>
-              <div className="logline">
-                <span>NPi (NUV ÷ 24h)</span>
-                <b>{measured.npi.ratio == null ? 'withheld' : `${(measured.npi.ratio * 100).toFixed(0)}%`}</b>
-              </div>
-              <div className="logline"><span>Voids measured</span><b>{measured.measuredVoids} / {measured.totalVoids}</b></div>
-            </div>
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {measured.complete ? (
-                <span className="pill ok">Complete window</span>
-              ) : (
-                <span className="pill warn">{measured.incompleteNote}</span>
-              )}
-              {measured.npi.overThreshold != null && (
-                <span className={`pill ${measured.npi.overThreshold ? 'warn' : 'ok'}`}>
-                  {measured.npi.overThreshold ? 'Over 33% threshold' : 'Under 33% threshold'}
-                </span>
-              )}
-            </div>
-            <p className="note" style={{ marginTop: 10 }}>
-              The ratio is flagged against an age-dependent threshold — it’s not a diagnosis.
-            </p>
-          </>
-        )}
-      </div>
+      {(has('nocturia') || has('nightWetting') || measured) && (
+        <Card title="Night & polyuria" onClick={() => openDetail('nights')}>
+          <div className="grid">
+            <Metric n={trend.nocturiaEpisodesTotal} label="nocturia episodes" />
+            <Metric
+              n={measured?.npi.ratio != null ? `${(measured.npi.ratio * 100).toFixed(0)}%` : '—'}
+              label="NPi (needs measured)"
+            />
+          </div>
+          {measured && !measured.complete && <div className="pill warn" style={{ marginTop: 12 }}>{measured.incompleteNote}</div>}
+          {measured?.npi.overThreshold && <div className="pill warn" style={{ marginTop: 12 }}>Over 33% threshold</div>}
+        </Card>
+      )}
+
+      {has('bph') && (
+        <Card title="Emptying / BPH" onClick={() => openDetail('bph')}>
+          <div className="stat"><span className="n">{streamShare.hit}</span><span className="u">of {streamShare.of} voids weak/dribble</span></div>
+        </Card>
+      )}
+
+      {has('urgency') && (
+        <Card title="Urgency" onClick={() => openDetail('urgency')}>
+          <div className="stat"><span className="n">{urgencyShare.hit}</span><span className="u">of {urgencyShare.of} voids strong+</span></div>
+        </Card>
+      )}
+
+      {has('leakage') && (
+        <Card title="Leaks" onClick={() => openDetail('leaks')}>
+          <div className="stat"><span className="n">{leaks.length}</span><span className="u">{topTrigger ? `· most often: ${topTrigger[0]}` : ''}</span></div>
+        </Card>
+      )}
 
       <div className="spacer-v" />
-      <button className="ghost block center" onClick={loadSample}>
-        Load a sample measured night (to see a full report)
-      </button>
+      {entries.length === 0 && <p className="note">No data yet. Log a few events — or load a sample night below.</p>}
+      <button className="ghost block center" onClick={loadSample}>Load a sample measured night</button>
     </div>
   );
 }
