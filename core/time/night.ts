@@ -40,7 +40,28 @@ export function classifyVoid(
   sleep: SleepPeriod,
   allVoids: readonly VoidEvent[],
 ): VoidClass {
-  throw new Error('not implemented');
+  const { bedtime, rising } = sleep;
+  const morningWindowEnd = rising + FIRST_MORNING_WINDOW_MS;
+
+  // The pre-sleep void is the last void at or before bedtime — the bladder is
+  // emptied at the start of the sleep period, so it is excluded from NUV.
+  const preSleep = allVoids
+    .filter((x) => x.at <= bedtime)
+    .reduce<VoidEvent | undefined>((latest, x) => (!latest || x.at > latest.at ? x : latest), undefined);
+  if (preSleep && v.id === preSleep.id) return 'pre-sleep';
+
+  // The first-morning void is the earliest void within the window after rising.
+  // Only the first one qualifies; later ones in the window are ordinary daytime voids.
+  const firstMorning = allVoids
+    .filter((x) => x.at >= rising && x.at <= morningWindowEnd)
+    .reduce<VoidEvent | undefined>((earliest, x) => (!earliest || x.at < earliest.at ? x : earliest), undefined);
+  if (firstMorning && v.id === firstMorning.id) return 'first-morning';
+
+  // Everything strictly inside the sleep period is nocturnal. Comparisons are on
+  // instants, so DST transitions (a skipped or repeated wall-clock hour) don't matter.
+  if (v.at > bedtime && v.at < rising) return 'nocturnal';
+
+  return 'daytime';
 }
 
 /**
@@ -52,7 +73,19 @@ export function nocturnalUrineVolume(
   voids: readonly VoidEvent[],
   sleep: SleepPeriod,
 ): number | null {
-  throw new Error('not implemented');
+  const contributing = voids.filter((v) => {
+    const cls = classifyVoid(v, sleep, voids);
+    return cls === 'nocturnal' || cls === 'first-morning';
+  });
+
+  let total = 0;
+  for (const v of contributing) {
+    // Honest degradation (spec §5.3): if any contributing void lacks a real
+    // measured/weighed volume, withhold NUV rather than guess a number.
+    if (v.volumeMl == null) return null;
+    total += v.volumeMl;
+  }
+  return total;
 }
 
 /**
@@ -60,7 +93,9 @@ export function nocturnalUrineVolume(
  * The first-morning void contributes its volume to NUV but is NOT counted here.
  */
 export function nocturiaCount(voids: readonly VoidEvent[], sleep: SleepPeriod): number {
-  throw new Error('not implemented');
+  // Nocturnal voids only — the first-morning void adds to NUV but is a rising,
+  // not a return to sleep, so it is not a nocturia episode.
+  return voids.filter((v) => classifyVoid(v, sleep, voids) === 'nocturnal').length;
 }
 
 /**
@@ -68,7 +103,9 @@ export function nocturiaCount(voids: readonly VoidEvent[], sleep: SleepPeriod): 
  * (rising − bedtime), never a wall-clock hour difference — that is the DST guard (spec §4).
  */
 export function sleepDurationMs(sleep: SleepPeriod): number {
-  throw new Error('not implemented');
+  // Instant subtraction — real elapsed time. On a DST night this differs from the
+  // wall-clock hour difference by ±1h, which is exactly the bug this guards against.
+  return sleep.rising - sleep.bedtime;
 }
 
 /**
@@ -77,5 +114,15 @@ export function sleepDurationMs(sleep: SleepPeriod): number {
  * 02:00 void lands on the night it belongs to, not the next calendar day.
  */
 export function nightId(sleep: SleepPeriod, timeZone: string): string {
-  throw new Error('not implemented');
+  // The local calendar date at the instant sleep began, in the given IANA zone.
+  // formatToParts avoids locale-ordering surprises; en-CA would also yield ISO order.
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(sleep.bedtime));
+  const part = (type: 'year' | 'month' | 'day'): string =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
