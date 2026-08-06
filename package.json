@@ -1,0 +1,16 @@
+{
+  "name": "bladder-diary-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Portable, UI-free core for the bladder diary app (spec in docs/spec.md).",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,104 @@
+import type { ReactNode } from 'react';
+import { useStore } from '../store';
+import { Topbar } from '../ui';
+import { voidsOf, leaksOf, nightsOf, changesOf, isWetNight, isDryNight, tally, share } from '../insights';
+
+function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button className="card block" onClick={onClick}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>{title}</h3>
+        <span style={{ color: 'var(--muted)' }}>›</span>
+      </div>
+      <div style={{ marginTop: 10 }}>{children}</div>
+    </button>
+  );
+}
+
+const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
+  <div><div className="stat"><span className="n">{n}</span></div><div className="sub">{label}</div></div>
+);
+
+export function Report() {
+  const { entries, enabledModules, reports, navigate, openDetail, loadSample } = useStore();
+  const voids = voidsOf(entries);
+  const leaks = leaksOf(entries);
+  const nights = nightsOf(entries);
+  const changes = changesOf(entries);
+  const has = (m: string) => enabledModules.includes(m);
+  const { trend, measured } = reports;
+
+  const streamShare = share(voids, 'stream', ['Weak', 'Dribble']);
+  const urgencyShare = share(voids, 'urgency', ['Strong', 'Couldn’t wait']);
+  const triggers = tally(leaks, 'leakTrigger');
+  const topTrigger = Object.entries(triggers).sort((a, b) => b[1] - a[1])[0];
+
+  // Nocturia as an average per tracked night, not a raw total.
+  const avgNocturia = trend.nightsTracked > 0 ? (trend.nocturiaEpisodesTotal / trend.nightsTracked).toFixed(1) : '—';
+  const wetNights = nights.filter(isWetNight).length;
+  const dryNights = nights.filter(isDryNight).length;
+  const absorbedMl = changes.reduce((sum, c) => sum + (c.volumeMl ?? 0), 0);
+
+  return (
+    <div className="screen">
+      <Topbar title="Report" onBack={() => navigate('home')} />
+      <p className="lead">Tap any card to see the data behind it.</p>
+
+      <Card title="Activity" onClick={() => openDetail('log')}>
+        <div className="grid">
+          <Metric n={voids.length} label="voids" />
+          <Metric n={leaks.length} label="leaks" />
+          <Metric n={nights.length} label="nights" />
+          <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
+        </div>
+      </Card>
+
+      {(has('nocturia') || has('nightWetting') || measured) && (
+        <Card title="Night & polyuria" onClick={() => openDetail('nights')}>
+          <div className="grid">
+            <Metric n={avgNocturia} label="nocturia / night" />
+            <Metric
+              n={measured?.npi.ratio != null ? `${(measured.npi.ratio * 100).toFixed(0)}%` : '—'}
+              label="NPi (needs measured)"
+            />
+            {has('nightWetting') && <Metric n={wetNights} label="wet nights" />}
+            {has('nightWetting') && <Metric n={dryNights} label="dry nights" />}
+          </div>
+          {measured && !measured.complete && <div className="pill warn" style={{ marginTop: 12 }}>{measured.incompleteNote}</div>}
+          {measured?.npi.overThreshold && <div className="pill warn" style={{ marginTop: 12 }}>Over 33% threshold</div>}
+        </Card>
+      )}
+
+      {has('protection') && (
+        <Card title="Protection" onClick={() => openDetail('changes')}>
+          <div className="grid">
+            <Metric n={changes.length} label="changes" />
+            <Metric n={absorbedMl > 0 ? `${absorbedMl}` : '—'} label="ml absorbed" />
+          </div>
+        </Card>
+      )}
+
+      {has('bph') && (
+        <Card title="Emptying / BPH" onClick={() => openDetail('bph')}>
+          <div className="stat"><span className="n">{streamShare.hit}</span><span className="u">of {streamShare.of} voids weak/dribble</span></div>
+        </Card>
+      )}
+
+      {has('urgency') && (
+        <Card title="Urgency" onClick={() => openDetail('urgency')}>
+          <div className="stat"><span className="n">{urgencyShare.hit}</span><span className="u">of {urgencyShare.of} voids strong+</span></div>
+        </Card>
+      )}
+
+      {has('leakage') && (
+        <Card title="Leaks" onClick={() => openDetail('leaks')}>
+          <div className="stat"><span className="n">{leaks.length}</span><span className="u">{topTrigger ? `· most often: ${topTrigger[0]}` : ''}</span></div>
+        </Card>
+      )}
+
+      <div className="spacer-v" />
+      {entries.length === 0 && <p className="note">No data yet. Log a few events — or load a sample night below.</p>}
+      <button className="ghost block center" onClick={loadSample}>Load a sample measured night</button>
+    </div>
+  );
+}

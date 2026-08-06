@@ -1,0 +1,250 @@
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  composeCore,
+  composeGateway,
+  buildTrendReport,
+  buildMeasuredDayReport,
+  nocturiaCount,
+  type Surface,
+  type TrackingModule,
+  type VoidEvent,
+  type SleepPeriod,
+  type DayVoids,
+  type MeasuredDayReport,
+  type TrendReport,
+} from '@core';
+import { MODULES, DEFAULT_DRY_WEIGHTS, type AppQuestion, type ModuleDef } from './modules';
+
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'morning' | 'report' | 'detail' | 'settings';
+
+export interface VoidEntry {
+  kind: 'void';
+  id: string;
+  at: number;
+  volumeMl: number | null;
+  answers: Record<string, string>;
+}
+export interface LeakEntry {
+  kind: 'leak';
+  id: string;
+  at: number;
+  answers: Record<string, string>;
+}
+export interface NightEntry {
+  kind: 'night';
+  id: string;
+  nightId: string;
+  bedtime: number;
+  rising: number;
+  firstVoidVolumeMl: number | null;
+  answers: Record<string, string>;
+}
+/** A protection change: urine that went into the product, not the toilet. Carries a
+ * volume (usually weighed) but is NOT a bathroom trip, so it never adds to nocturia. */
+export interface ChangeEntry {
+  kind: 'change';
+  id: string;
+  at: number;
+  productId: string | null;
+  volumeMl: number | null;
+  answers: Record<string, string>;
+}
+export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry;
+
+/** A protection product in the user's library — a trait, set rarely (spec §6.5). */
+export interface Product {
+  id: string;
+  name: string;
+  dryGrams: number;
+  /** The absorbency tier it was created from (for dedup + default weight). */
+  tier?: string;
+}
+
+interface State {
+  onboarded: boolean;
+  enabledModules: string[];
+  traits: Record<string, string>;
+  products: Product[];
+  entries: LogEntry[];
+  measuredDay: boolean;
+  screen: Screen;
+  /** Which drill-down the detail screen is showing. */
+  detail: string | null;
+}
+
+interface Store extends State {
+  navigate: (s: Screen) => void;
+  openDetail: (key: string) => void;
+  completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
+  logVoid: (v: { volumeMl: number | null; answers: Record<string, string> }) => void;
+  logLeak: (answers: Record<string, string>) => void;
+  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string> }) => void;
+  logNight: (n: Omit<NightEntry, 'kind' | 'id' | 'nightId'>) => void;
+  setMeasuredDay: (on: boolean) => void;
+  addProduct: (name: string, dryGrams: number, tier?: string) => void;
+  updateProduct: (id: string, patch: { name?: string; dryGrams?: number }) => void;
+  removeProduct: (id: string) => void;
+  loadSample: () => void;
+  rerunOnboarding: () => void;
+  reset: () => void;
+  enabledModuleDefs: ModuleDef[];
+  coreQuestions: (surface: Surface) => AppQuestion[];
+  gatewayQuestions: (surface: Surface) => AppQuestion[];
+  reports: { trend: TrendReport; measured: MeasuredDayReport | null };
+}
+
+const Ctx = createContext<Store | null>(null);
+export const useStore = (): Store => {
+  const s = useContext(Ctx);
+  if (!s) throw new Error('useStore outside provider');
+  return s;
+};
+
+const initial: State = {
+  onboarded: false,
+  enabledModules: [],
+  traits: {},
+  // Empty by default — weighing only applies to people who use protection, so the
+  // library (and the "weigh a product" option) stays hidden until they add one.
+  products: [],
+  entries: [],
+  measuredDay: false,
+  screen: 'onboarding',
+  detail: null,
+};
+
+let seq = 0;
+const id = (): string => `e${Date.now()}_${seq++}`;
+const dayKey = (at: number): string => new Date(at).toLocaleDateString('en-CA'); // YYYY-MM-DD local
+
+/** Build TrackingModules the core can compose from the enabled set. */
+function trackingModules(enabled: string[]): TrackingModule[] {
+  return enabled.map((mid) => ({
+    id: mid,
+    enabled: true,
+    eventTypes: [],
+    questions: MODULES[mid]?.questions ?? [],
+  }));
+}
+
+export function StoreProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<State>(initial);
+
+  const store = useMemo<Store>(() => {
+    const voids = state.entries.filter((e): e is VoidEntry => e.kind === 'void');
+    const nights = state.entries.filter((e): e is NightEntry => e.kind === 'night');
+    const changes = state.entries.filter((e): e is ChangeEntry => e.kind === 'change');
+    const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
+    // Changed products carry real urine volume but are not bathroom trips.
+    const changeVoids: VoidEvent[] = changes.map((c) => ({ id: c.id, at: c.at, volumeMl: c.volumeMl }));
+    const volumeEvents = [...coreVoids, ...changeVoids];
+
+    // Most recent logged night → the sleep period used for the measured-day report.
+    const latestSleep: SleepPeriod | null = nights.length
+      ? nights.reduce((a, b) => (b.rising > a.rising ? b : a))
+      : null;
+
+    // Group voids by the calendar day they occurred; attach a night's sleep to the
+    // day it ends on. Enough to exercise buildTrendReport honestly in the prototype.
+    const byDay = new Map<string, VoidEvent[]>();
+    for (const v of coreVoids) {
+      const k = dayKey(v.at);
+      (byDay.get(k) ?? byDay.set(k, []).get(k)!).push(v);
+    }
+    for (const n of nights) if (!byDay.has(dayKey(n.rising))) byDay.set(dayKey(n.rising), []);
+    const days: DayVoids[] = [...byDay.entries()].map(([k, dv]) => {
+      const night = nights.find((n) => dayKey(n.rising) === k);
+      return night
+        ? { nightId: k, voids: dv, sleep: { bedtime: night.bedtime, rising: night.rising } }
+        : { nightId: k, voids: dv };
+    });
+
+    const measured =
+      state.measuredDay && latestSleep && volumeEvents.length
+        ? // NUV/NPi include absorbed volume; nocturia counts actual voids only.
+          { ...buildMeasuredDayReport(volumeEvents, latestSleep), nocturiaEpisodes: nocturiaCount(coreVoids, latestSleep) }
+        : null;
+
+    return {
+      ...state,
+      navigate: (screen) => setState((s) => ({ ...s, screen })),
+      openDetail: (key) => setState((s) => ({ ...s, screen: 'detail', detail: key })),
+      completeOnboarding: (modules, traits, productTiers) =>
+        setState((s) => {
+          // Auto-create a library product for each absorbency tier the user selected,
+          // seeded with the tier's default weight; deduped by tier so re-running is safe.
+          const have = new Set(s.products.map((p) => p.tier).filter(Boolean));
+          const created: Product[] = [];
+          for (const tier of productTiers) {
+            if (!have.has(tier)) {
+              created.push({ id: id(), name: tier, dryGrams: DEFAULT_DRY_WEIGHTS[tier] ?? 0, tier });
+              have.add(tier);
+            }
+          }
+          return { ...s, onboarded: true, enabledModules: modules, traits, products: [...s.products, ...created], screen: 'home' };
+        }),
+      logVoid: ({ volumeMl, answers }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: Date.now(), volumeMl, answers }] })),
+      logLeak: (answers) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: Date.now(), answers }] })),
+      logChange: ({ productId, volumeMl, answers }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: Date.now(), productId, volumeMl, answers }] })),
+      logNight: (n) =>
+        setState((s) => {
+          const night: NightEntry = { kind: 'night', id: id(), nightId: dayKey(n.bedtime), ...n };
+          // The first-morning void is the single most informative volume — record it as
+          // a real void just after rising so NUV/NPi can pick it up (spec §4, §7.6).
+          const firstVoid: LogEntry[] =
+            n.firstVoidVolumeMl != null
+              ? [{ kind: 'void', id: id(), at: n.rising + 10 * 60_000, volumeMl: n.firstVoidVolumeMl, answers: { firstMorning: 'yes' } }]
+              : [];
+          return { ...s, entries: [...s.entries, night, ...firstVoid] };
+        }),
+      setMeasuredDay: (on) => setState((s) => ({ ...s, measuredDay: on })),
+      addProduct: (name, dryGrams, tier) =>
+        setState((s) => ({ ...s, products: [...s.products, { id: id(), name, dryGrams, tier }] })),
+      updateProduct: (pid, patch) =>
+        setState((s) => ({ ...s, products: s.products.map((p) => (p.id === pid ? { ...p, ...patch } : p)) })),
+      removeProduct: (pid) => setState((s) => ({ ...s, products: s.products.filter((p) => p.id !== pid) })),
+      // Re-run onboarding: back to the setup flow, keeping logged events (spec §7.1).
+      rerunOnboarding: () => setState((s) => ({ ...s, onboarded: false })),
+      loadSample: () =>
+        setState((s) => {
+          // A realistic fully-measured night so the report is worth looking at without
+          // waiting a real 24h: NUV 660 / 1500 → NPi 0.44, 2 nocturia episodes.
+          const rising = new Date();
+          rising.setHours(7, 0, 0, 0);
+          const r = rising.getTime();
+          const b = r - 8 * 3_600_000; // 23:00 the night before
+          const H = 3_600_000;
+          const sample: LogEntry[] = [
+            { kind: 'void', id: id(), at: b - 15 * 60_000, volumeMl: 300, answers: {} }, // pre-sleep (excluded)
+            { kind: 'void', id: id(), at: b + 2.5 * H, volumeMl: 220, answers: {} }, // nocturnal
+            { kind: 'void', id: id(), at: b + 5.25 * H, volumeMl: 180, answers: {} }, // nocturnal
+            { kind: 'void', id: id(), at: r + 10 * 60_000, volumeMl: 260, answers: { firstMorning: 'yes' } }, // first-morning
+            { kind: 'void', id: id(), at: r + 5 * H, volumeMl: 300, answers: {} }, // daytime
+            { kind: 'void', id: id(), at: r + 11 * H, volumeMl: 240, answers: {} }, // daytime
+            {
+              kind: 'night',
+              id: id(),
+              nightId: dayKey(b),
+              bedtime: b,
+              rising: r,
+              firstVoidVolumeMl: 260,
+              answers: { howWasNight: 'Woke several times', wetDry: 'Dry' },
+            },
+          ];
+          return { ...s, entries: [...s.entries, ...sample], measuredDay: true };
+        }),
+      reset: () => setState({ ...initial }),
+      enabledModuleDefs: state.enabledModules.map((m) => MODULES[m]).filter((m): m is ModuleDef => !!m),
+      coreQuestions: (surface) =>
+        composeCore(trackingModules(state.enabledModules), surface) as AppQuestion[],
+      gatewayQuestions: (surface) =>
+        composeGateway(trackingModules(state.enabledModules), surface) as AppQuestion[],
+      reports: { trend: buildTrendReport(days), measured },
+    };
+  }, [state]);
+
+  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
+}
