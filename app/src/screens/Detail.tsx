@@ -74,7 +74,8 @@ export function Detail() {
                 <h3>{dateStr(n.bedtime)} night</h3>
                 <div className="sub">{timeStr(n.bedtime)} → {timeStr(n.rising)} · {durationStr(sleepDurationMs(sleep))} asleep</div>
                 <div className="list" style={{ marginTop: 10 }}>
-                  <Row left="Nocturia episodes" right={String(nocturiaCount(coreVoids, sleep))} />
+                  <Row left="Nocturia — logged voids" right={String(nocturiaCount(coreVoids, sleep))} />
+                  {n.answers.nightVoids && <Row left="Nocturia — you reported" right={n.answers.nightVoids} />}
                   <Row left="Nocturnal urine volume" right={nuv == null ? 'withheld' : `${nuv} ml`} />
                   <Row left="NPi (NUV ÷ 24h)" right={npi.ratio == null ? 'withheld' : `${(npi.ratio * 100).toFixed(0)}%`} />
                   {(n.answers.howWasNight || n.answers.wetDry) && (

@@ -103,6 +103,23 @@ export const MODULES: Record<string, ModuleDef> = {
 
 export const MODULE_ORDER = ['nocturia', 'nightWetting', 'urgency', 'leakage', 'bph', 'protection', 'awareness'];
 
+/**
+ * Absorbency tiers with typical dry weights (grams). Used to auto-create library
+ * entries when onboarding says you use protection; each product is then renameable
+ * and reweighable in Settings. Weights are tier defaults, not exact product specs.
+ */
+export const PRODUCT_TIERS: { name: string; grams: number }[] = [
+  { name: 'Light guard / shield', grams: 20 }, // Prevail Guard, Tena Men L1
+  { name: 'Standard guard', grams: 40 }, // Depend Guard, Tena Men L2/3
+  { name: 'Daytime pull-up', grams: 60 }, // Depend Real Fit, Tena Stretch
+  { name: 'Overnight brief', grams: 100 }, // Tranquility ATN, TENA Complete
+  { name: 'Max-capacity brief', grams: 220 }, // NorthShore MegaMax, BetterDry
+];
+
+export const DEFAULT_DRY_WEIGHTS: Record<string, number> = Object.fromEntries(
+  PRODUCT_TIERS.map((t) => [t.name, t.grams]),
+);
+
 /** Quick-onboarding questions → the QuickOnboardingAnswers keys the core infers from. */
 export const ONBOARD_QUESTIONS: { key: string; prompt: string }[] = [
   { key: 'wakesToUrinateAtNight', prompt: 'Do you wake at night to urinate?' },
@@ -120,6 +137,6 @@ export const EXPANDED_TRAITS: { module: string; key: string; prompt: string; opt
   { module: 'awareness', key: 'warningTime', prompt: 'Once you know, how much warning do you get?', options: ['15+ min', '5–15 min', '<5 min', 'Almost none'] },
   // The general "usually?" version of leak awareness — a trait, where "sometimes" belongs.
   { module: 'awareness', key: 'leakNoticing', prompt: 'When you leak, do you usually notice?', options: ['Usually feel it', 'Sometimes', 'Usually find out after', 'Wake and find it'] },
-  { module: 'protection', key: 'daytimeProduct', prompt: 'Do you use a daytime product?', options: ['None', 'Pad', 'Guard', 'Pull-up', 'Diaper'] },
-  { module: 'protection', key: 'overnightProduct', prompt: 'Main overnight product?', options: ['None', 'Pad', 'Guard', 'Pull-up', 'Diaper'] },
+  { module: 'protection', key: 'daytimeProduct', prompt: 'Daytime product?', options: ['None', ...PRODUCT_TIERS.map((t) => t.name)] },
+  { module: 'protection', key: 'overnightProduct', prompt: 'Overnight product?', options: ['None', ...PRODUCT_TIERS.map((t) => t.name)] },
 ];

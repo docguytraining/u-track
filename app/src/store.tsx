@@ -12,7 +12,7 @@ import {
   type MeasuredDayReport,
   type TrendReport,
 } from '@core';
-import { MODULES, type AppQuestion, type ModuleDef } from './modules';
+import { MODULES, DEFAULT_DRY_WEIGHTS, type AppQuestion, type ModuleDef } from './modules';
 
 export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'morning' | 'report' | 'detail' | 'settings';
 
@@ -89,8 +89,9 @@ const initial: State = {
   onboarded: false,
   enabledModules: [],
   traits: {},
-  // One sample product so the weigh-a-product path is usable immediately (§6.5 example).
-  products: [{ id: 'p1', name: 'Overnight diaper', dryGrams: 62 }],
+  // Empty by default — weighing only applies to people who use protection, so the
+  // library (and the "weigh a product" option) stays hidden until they add one.
+  products: [],
   entries: [],
   measuredDay: false,
   screen: 'onboarding',
@@ -149,7 +150,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       navigate: (screen) => setState((s) => ({ ...s, screen })),
       openDetail: (key) => setState((s) => ({ ...s, screen: 'detail', detail: key })),
       completeOnboarding: (modules, traits) =>
-        setState((s) => ({ ...s, onboarded: true, enabledModules: modules, traits, screen: 'home' })),
+        setState((s) => {
+          // Auto-create a library product for each protection type the user says they
+          // use, seeded with a default weight. They can rename/reweight it in Settings.
+          const wanted = [traits.daytimeProduct, traits.overnightProduct].filter((t) => t && t !== 'None');
+          const have = new Set(s.products.map((p) => p.name));
+          const created: Product[] = [];
+          for (const type of wanted) {
+            if (!have.has(type)) {
+              created.push({ id: id(), name: type, dryGrams: DEFAULT_DRY_WEIGHTS[type] ?? 0 });
+              have.add(type);
+            }
+          }
+          return { ...s, onboarded: true, enabledModules: modules, traits, products: [...s.products, ...created], screen: 'home' };
+        }),
       logVoid: ({ volumeMl, answers }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: Date.now(), volumeMl, answers }] })),
       logLeak: (answers) =>

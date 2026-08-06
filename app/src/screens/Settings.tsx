@@ -43,6 +43,7 @@ export function Settings() {
         </div>
       )}
 
+      {enabledModules.includes('protection') && (
       <div className="card">
         <h3>Protection products</h3>
         <div className="sub" style={{ marginTop: 2 }}>Dry weights let the app weigh a used product into millilitres.</div>
@@ -61,6 +62,7 @@ export function Settings() {
         </div>
         <button className="block center" style={{ marginTop: 8 }} onClick={add}>Add product</button>
       </div>
+      )}
 
       <div className="card">
         <h3>This session</h3>
