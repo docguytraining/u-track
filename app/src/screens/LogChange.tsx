@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { weighedVolumeMl } from '@core';
 import { useStore } from '../store';
-import { Topbar, OptionGroup } from '../ui';
+import { Topbar, OptionGroup, WhenField } from '../ui';
 import { fmtVol } from '../units';
 
 export function LogChange() {
@@ -9,13 +9,14 @@ export function LogChange() {
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [wet, setWet] = useState('');
   const [fullness, setFullness] = useState('');
+  const [at, setAt] = useState<number | null>(null);
 
   const product = products.find((p) => p.id === productId);
   const wetNum = Number(wet);
   const volumeMl = product && wet !== '' && !Number.isNaN(wetNum) ? weighedVolumeMl(product.dryGrams, wetNum) : null;
 
   const done = () => {
-    logChange({ productId: productId || null, volumeMl, answers: fullness ? { fullness } : {} });
+    logChange({ productId: productId || null, volumeMl, answers: fullness ? { fullness } : {}, at: at ?? undefined });
     navigate('home');
   };
 
@@ -61,6 +62,8 @@ export function LogChange() {
           />
         </>
       )}
+
+      <WhenField value={at} onChange={setAt} />
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={done}>Done</button>

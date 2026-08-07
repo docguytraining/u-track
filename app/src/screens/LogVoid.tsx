@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { Topbar, OptionGroup, VolumeField } from '../ui';
+import { Topbar, OptionGroup, VolumeField, WhenField } from '../ui';
 
 export function LogVoid() {
   const { coreQuestions, gatewayQuestions, measuredDay, logVoid, navigate, products } = useStore();
@@ -8,11 +8,12 @@ export function LogVoid() {
   const gateway = gatewayQuestions('void');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
+  const [at, setAt] = useState<number | null>(null);
   const [showMore, setShowMore] = useState(false);
 
   const set = (qid: string, v: string) => setAnswers((a) => ({ ...a, [qid]: v }));
   const done = () => {
-    logVoid({ volumeMl, answers });
+    logVoid({ volumeMl, answers, at: at ?? undefined });
     navigate('home');
   };
 
@@ -42,6 +43,8 @@ export function LogVoid() {
         gateway.map((q) => (
           <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
         ))}
+
+      <WhenField value={at} onChange={setAt} />
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={done}>

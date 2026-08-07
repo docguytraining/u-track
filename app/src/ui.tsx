@@ -119,3 +119,29 @@ export function VolumeField({
     </div>
   );
 }
+
+/** Optional backdating: "Now" by default, or pick an earlier date/time. value in ms, null = now. */
+export function WhenField({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const toLocal = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  return (
+    <div className="field">
+      <label>When</label>
+      <div className="chips">
+        <button className={value == null ? 'selected' : ''} onClick={() => onChange(null)}>Now</button>
+        <button className={value != null ? 'selected' : ''} onClick={() => onChange(value ?? Date.now())}>Earlier…</button>
+      </div>
+      {value != null && (
+        <input
+          className="numinput"
+          type="datetime-local"
+          value={toLocal(value)}
+          onChange={(e) => { const ms = new Date(e.target.value).getTime(); if (!Number.isNaN(ms)) onChange(ms); }}
+        />
+      )}
+    </div>
+  );
+}

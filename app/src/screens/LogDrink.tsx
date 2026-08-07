@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { Topbar } from '../ui';
+import { Topbar, WhenField } from '../ui';
 import { fmtVol, DRINK_SIZES, ML_PER_OZ } from '../units';
 
 export function LogDrink() {
@@ -9,11 +9,12 @@ export function LogDrink() {
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
   const [customMode, setCustomMode] = useState(false);
   const [custom, setCustom] = useState('');
+  const [at, setAt] = useState<number | null>(null);
   const sizes = DRINK_SIZES[units];
   const toMl = (n: number) => (units === 'oz' ? n * ML_PER_OZ : n);
 
   const done = () => {
-    logDrink({ type: type || 'Other', volumeMl });
+    logDrink({ type: type || 'Other', volumeMl, at: at ?? undefined });
     navigate('home');
   };
 
@@ -56,6 +57,8 @@ export function LogDrink() {
           />
         )}
       </div>
+
+      <WhenField value={at} onChange={setAt} />
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={done}>Done</button>

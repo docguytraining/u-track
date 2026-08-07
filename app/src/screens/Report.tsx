@@ -138,7 +138,7 @@ export function Report() {
 
       <div className="spacer-v" />
       {entries.length === 0 && <p className="note">No data yet. Log a few events — or load a sample night below.</p>}
-      <button className="ghost block center" onClick={loadSample}>Load a sample measured night</button>
+      <button className="ghost block center" onClick={loadSample}>Load a few weeks of sample data</button>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   composeCore,
   composeGateway,
@@ -15,8 +16,17 @@ import {
 } from '@core';
 import { MODULES, DEFAULT_DRY_WEIGHTS, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
 import type { Units } from './units';
+import { cloudEnabled, onAuth, db, signInWithGoogle, signOutUser, completeMagicLink } from './firebase';
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings';
+/** Fields that persist to Firestore (everything except transient UI/auth state). */
+const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries'] as const;
+export interface AppUser {
+  uid: string;
+  name: string | null;
+  email: string | null;
+}
+
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
 
 export interface VoidEntry {
   kind: 'void';
@@ -83,16 +93,22 @@ interface State {
   screen: Screen;
   /** Which drill-down the detail screen is showing. */
   detail: string | null;
+  /** Signed-in user, or null in guest/local mode. */
+  user: AppUser | null;
+  /** True once the initial auth check has completed (avoids an onboarding flash). */
+  authReady: boolean;
 }
 
 interface Store extends State {
   navigate: (s: Screen) => void;
   openDetail: (key: string) => void;
+  signIn: () => void;
+  signOut: () => void;
   completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
-  logVoid: (v: { volumeMl: number | null; answers: Record<string, string> }) => void;
-  logLeak: (answers: Record<string, string>) => void;
-  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string> }) => void;
-  logDrink: (d: { type: string; volumeMl: number | null }) => void;
+  logVoid: (v: { volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
+  logLeak: (answers: Record<string, string>, at?: number) => void;
+  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
+  logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   removeDrinkType: (name: string) => void;
   addDrinkType: (name: string) => void;
   setUnits: (u: Units) => void;
@@ -130,6 +146,8 @@ const initial: State = {
   measuredDay: false,
   screen: 'onboarding',
   detail: null,
+  user: null,
+  authReady: false,
 };
 
 let seq = 0;
@@ -148,6 +166,54 @@ function trackingModules(enabled: string[]): TrackingModule[] {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
+  const hydrating = useRef(false);
+
+  // Auth: subscribe once. On sign-in, load the user's cloud doc (or seed it from the
+  // current local state on first sign-in). In guest mode, just mark auth ready.
+  useEffect(() => {
+    if (!cloudEnabled) {
+      setState((s) => ({ ...s, authReady: true }));
+      return;
+    }
+    // If this page load is a magic-link redirect, finish sign-in (then onAuth fires).
+    void completeMagicLink().catch(() => {});
+    return onAuth(async (u) => {
+      if (!u || !db) {
+        setState((s) => ({ ...s, user: null, authReady: true }));
+        return;
+      }
+      hydrating.current = true;
+      let data: Record<string, unknown> | null = null;
+      try {
+        const snap = await getDoc(doc(db, 'users', u.uid));
+        data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+      } catch { /* offline or rules-denied — treat as empty; never fall back to prior state */ }
+      setState(() => {
+        // SECURITY (multi-tenant): every signed-in session starts from clean defaults —
+        // never the previous session's state — so one user can NEVER see another's data
+        // (or their own guest data). Only this user's own cloud doc populates it.
+        const next: State = { ...initial, user: { uid: u.uid, name: u.displayName, email: u.email }, authReady: true };
+        if (data) {
+          for (const k of PERSIST_KEYS) {
+            if (data[k] !== undefined) (next as Record<string, unknown>)[k] = data[k];
+          }
+        }
+        next.screen = next.onboarded ? 'home' : 'onboarding';
+        return next;
+      });
+      hydrating.current = false;
+    });
+  }, []);
+
+  // Persist to Firestore (debounced) whenever a persisted field changes while signed in.
+  useEffect(() => {
+    if (!cloudEnabled || !db || !state.user || hydrating.current) return;
+    const snapshot = Object.fromEntries(PERSIST_KEYS.map((k) => [k, state[k]]));
+    const ref = doc(db, 'users', state.user.uid);
+    const t = setTimeout(() => { setDoc(ref, snapshot, { merge: true }).catch(() => {}); }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.user, state.onboarded, state.enabledModules, state.traits, state.products, state.drinkTypes, state.units, state.entries]);
 
   const store = useMemo<Store>(() => {
     const voids = state.entries.filter((e): e is VoidEntry => e.kind === 'void');
@@ -188,6 +254,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...state,
       navigate: (screen) => setState((s) => ({ ...s, screen })),
       openDetail: (key) => setState((s) => ({ ...s, screen: 'detail', detail: key })),
+      signIn: () => { void signInWithGoogle().catch(() => {}); },
+      // Sign out returns to a clean guest state so no data lingers on the shared device.
+      signOut: () => { void signOutUser().finally(() => setState(() => ({ ...initial, authReady: true }))); },
       completeOnboarding: (modules, traits, productTiers) =>
         setState((s) => {
           // Auto-create a library product for each absorbency tier the user selected,
@@ -202,14 +271,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
           return { ...s, onboarded: true, enabledModules: modules, traits, products: [...s.products, ...created], screen: 'home' };
         }),
-      logVoid: ({ volumeMl, answers }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: Date.now(), volumeMl, answers }] })),
-      logLeak: (answers) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: Date.now(), answers }] })),
-      logChange: ({ productId, volumeMl, answers }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: Date.now(), productId, volumeMl, answers }] })),
-      logDrink: ({ type, volumeMl }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: Date.now(), type, volumeMl }] })),
+      logVoid: ({ volumeMl, answers, at }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), volumeMl, answers }] })),
+      logLeak: (answers, at) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: at ?? Date.now(), answers }] })),
+      logChange: ({ productId, volumeMl, answers, at }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
+      logDrink: ({ type, volumeMl, at }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
       addDrinkType: (name) => setState((s) => (s.drinkTypes.includes(name) ? s : { ...s, drinkTypes: [...s.drinkTypes, name] })),
       setUnits: (u) => setState((s) => ({ ...s, units: u })),
@@ -234,31 +303,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       rerunOnboarding: () => setState((s) => ({ ...s, onboarded: false })),
       loadSample: () =>
         setState((s) => {
-          // A realistic fully-measured night so the report is worth looking at without
-          // waiting a real 24h: NUV 660 / 1500 → NPi 0.44, 2 nocturia episodes.
-          const rising = new Date();
-          rising.setHours(7, 0, 0, 0);
-          const r = rising.getTime();
-          const b = r - 8 * 3_600_000; // 23:00 the night before
-          const H = 3_600_000;
-          const sample: LogEntry[] = [
-            { kind: 'void', id: id(), at: b - 15 * 60_000, volumeMl: 300, answers: {} }, // pre-sleep (excluded)
-            { kind: 'void', id: id(), at: b + 2.5 * H, volumeMl: 220, answers: {} }, // nocturnal
-            { kind: 'void', id: id(), at: b + 5.25 * H, volumeMl: 180, answers: {} }, // nocturnal
-            { kind: 'void', id: id(), at: r + 10 * 60_000, volumeMl: 260, answers: { firstMorning: 'yes' } }, // first-morning
-            { kind: 'void', id: id(), at: r + 5 * H, volumeMl: 300, answers: {} }, // daytime
-            { kind: 'void', id: id(), at: r + 11 * H, volumeMl: 240, answers: {} }, // daytime
-            {
-              kind: 'night',
-              id: id(),
-              nightId: dayKey(b),
-              bedtime: b,
-              rising: r,
-              firstVoidVolumeMl: 260,
-              answers: { howWasNight: 'Woke several times', wetDry: 'Dry' },
-            },
-          ];
-          return { ...s, entries: [...s.entries, ...sample], measuredDay: true };
+          // ~3 weeks of realistic data: measured on ~1 day in 3 (volumes present),
+          // partial otherwise; occasional missed night and leaks — so the reports and
+          // the data-quality flag have something honest to chew on.
+          const H = 3_600_000, DAY = 86_400_000, MIN = 60_000;
+          const midnight = new Date();
+          midnight.setHours(0, 0, 0, 0);
+          const base = midnight.getTime();
+          const rota = ['Water', 'Water', 'Soda', 'Water', 'Juice', 'Water'];
+          const out: LogEntry[] = [];
+          const N = 18;
+          for (let i = N - 1; i >= 0; i--) {
+            const day0 = base - i * DAY;
+            const rising = day0 + 7 * H + (i % 3) * 20 * MIN;
+            const bedtime = day0 - 1 * H - (i % 2) * 30 * MIN; // ~22:30–23:00 the night before
+            const measured = i % 3 === 0;
+            const hasNight = i % 5 !== 4; // occasional missed morning check-in
+            const nNoct = i % 3 === 1 ? 2 : 1;
+            const vol = (b: number) => (measured ? b : null);
+
+            out.push({ kind: 'void', id: id(), at: bedtime - 20 * MIN, volumeMl: vol(300), answers: {} }); // pre-sleep
+            for (let k = 0; k < nNoct; k++) out.push({ kind: 'void', id: id(), at: bedtime + (2 + k * 2.5) * H, volumeMl: vol(210 - k * 20), answers: {} });
+            const fm = vol(280);
+            out.push({ kind: 'void', id: id(), at: rising + 10 * MIN, volumeMl: fm, answers: { firstMorning: 'yes' } });
+            for (const t of [9, 11, 13, 15, 18, 20]) out.push({ kind: 'void', id: id(), at: day0 + t * H + (i % 7) * MIN, volumeMl: vol(220 + (t % 3) * 30), answers: {} });
+            let di = 0;
+            for (const t of [7, 10, 12, 15, 18, 20]) { out.push({ kind: 'drink', id: id(), at: day0 + t * H, type: rota[(i + di) % rota.length] ?? 'Water', volumeMl: 355 }); di++; }
+            // Mostly wet, occasionally dry — realistic for someone in overnight briefs.
+            const wetDry = ['Wet', 'Soaked', 'Damp', 'Wet', 'Dry', 'Soaked'][i % 6]!;
+            const isWet = wetDry !== 'Dry';
+            if (hasNight) out.push({ kind: 'night', id: id(), nightId: dayKey(bedtime), bedtime, rising, firstVoidVolumeMl: fm, answers: { howWasNight: nNoct > 1 ? 'Woke several times' : 'Woke to pee', wetDry, nightVoids: String(nNoct) } });
+            // On wet nights, a weighed overnight change — urine into the brief, not the toilet.
+            if (isWet) out.push({ kind: 'change', id: id(), at: rising + 5 * MIN, productId: null, volumeMl: 260 + (i % 4) * 60, answers: { fullness: wetDry === 'Soaked' ? 'Saturated' : 'Heavy' } });
+            if (i % 4 === 0) out.push({ kind: 'leak', id: id(), at: day0 + 14 * H, answers: { leakSeverity: 'Damp', leakTrigger: i % 8 === 0 ? 'Cough / lift' : 'Urge' } });
+          }
+          return { ...s, entries: [...s.entries, ...out], measuredDay: true };
         }),
       reset: () => setState({ ...initial }),
       enabledModuleDefs: state.enabledModules.map((m) => MODULES[m]).filter((m): m is ModuleDef => !!m),

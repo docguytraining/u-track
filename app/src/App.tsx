@@ -10,9 +10,20 @@ import { Report } from './screens/Report';
 import { Chart } from './screens/Chart';
 import { Detail } from './screens/Detail';
 import { Settings } from './screens/Settings';
+import { SignIn } from './screens/SignIn';
 
 export function App() {
-  const { onboarded, screen } = useStore();
+  const { onboarded, screen, authReady } = useStore();
+
+  if (!authReady) {
+    return (
+      <div className="app">
+        <div className="screen" style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <span className="eyebrow">u-track</span>
+        </div>
+      </div>
+    );
+  }
 
   const body = !onboarded ? (
     <Onboarding />
@@ -34,6 +45,8 @@ export function App() {
     <Detail />
   ) : screen === 'settings' ? (
     <Settings />
+  ) : screen === 'signin' ? (
+    <SignIn />
   ) : (
     <Home />
   );

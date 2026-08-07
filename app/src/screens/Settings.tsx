@@ -3,9 +3,10 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
+import { cloudEnabled, usingEmulator } from '../firebase';
 
 export function Settings() {
-  const { enabledModules, traits, products, drinkTypes, units, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits } = useStore();
+  const { enabledModules, traits, products, drinkTypes, units, entries, user, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
   const removedDrinks = DEFAULT_DRINK_NAMES.filter((d) => !drinkTypes.includes(d));
   const [tier, setTier] = useState('');
   const [name, setName] = useState('');
@@ -31,6 +32,28 @@ export function Settings() {
   return (
     <div className="screen">
       <Topbar title="Settings" onBack={() => navigate('home')} />
+
+      <div className="card">
+        <h3>Account</h3>
+        {!cloudEnabled ? (
+          <div className="sub" style={{ marginTop: 6 }}>Cloud sync isn’t configured (no Firebase env). Running local-only.</div>
+        ) : user ? (
+          <>
+            <div className="sub" style={{ marginTop: 6 }}>
+              Signed in as <b style={{ color: 'var(--text)' }}>{user.email ?? user.name ?? 'you'}</b> · syncing{usingEmulator ? ' (emulator)' : ''}.
+            </div>
+            <button className="ghost block center" style={{ marginTop: 10 }} onClick={signOut}>Sign out</button>
+          </>
+        ) : (
+          <>
+            <div className="sub" style={{ marginTop: 6 }}>
+              Using locally — data resets on refresh. Sign in to sync across your phone and iPad.
+              {usingEmulator ? ' (emulator: any fake account works)' : ''}
+            </div>
+            <button className="primary block center" style={{ marginTop: 10 }} onClick={() => navigate('signin')}>Sign in</button>
+          </>
+        )}
+      </div>
 
       <div className="card">
         <h3>Tracking modules</h3>
@@ -123,7 +146,7 @@ export function Settings() {
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={rerunOnboarding}>Re-run onboarding</button>
-      <button className="block center" onClick={loadSample}>Load a sample measured night</button>
+      <button className="block center" onClick={loadSample}>Load a few weeks of sample data</button>
       <button className="ghost block center danger" onClick={reset}>Reset everything (start over)</button>
     </div>
   );
