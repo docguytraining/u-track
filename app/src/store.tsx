@@ -5,6 +5,7 @@ import {
   composeGateway,
   buildTrendReport,
   buildMeasuredDayReport,
+  mergeOnSignIn,
   nocturiaCount,
   type Surface,
   type TrackingModule,
@@ -20,6 +21,9 @@ import { cloudEnabled, onAuth, db, signInWithGoogle, signOutUser, completeMagicL
 
 /** Fields that persist to Firestore (everything except transient UI/auth state). */
 const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries'] as const;
+type Persisted = Pick<State, (typeof PERSIST_KEYS)[number]>;
+const pickPersisted = (o: State): Persisted =>
+  Object.fromEntries(PERSIST_KEYS.map((k) => [k, o[k]])) as Persisted;
 export interface AppUser {
   uid: string;
   name: string | null;
@@ -189,19 +193,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
       } catch { /* offline or rules-denied — treat as empty; never fall back to prior state */ }
       setState((s) => {
-        // Start from clean defaults (so another user's session can never linger).
-        const next: State = { ...initial, user: { uid: u.uid, name: u.displayName, email: u.email }, authReady: true };
-        if (data) {
-          // Returning account: load ONLY this user's own cloud doc — no local carryover,
-          // so a user never sees another account's data.
-          for (const k of PERSIST_KEYS) {
-            if (data[k] !== undefined) (next as Record<string, unknown>)[k] = data[k];
-          }
-        } else {
-          // First sign-in for this account (no cloud doc yet): migrate the current
-          // local/guest data IN, so signing in SAVES your work instead of deleting it.
-          for (const k of PERSIST_KEYS) (next as Record<string, unknown>)[k] = s[k];
-        }
+        // Tested policy (core/sync/mergeOnSignIn): first sign-in migrates local data;
+        // a returning account loads only its own cloud doc — never a prior session.
+        const merged = mergeOnSignIn(pickPersisted(initial), pickPersisted(s), (data as Partial<Persisted>) ?? null);
+        const next: State = { ...initial, ...merged, user: { uid: u.uid, name: u.displayName, email: u.email }, authReady: true };
         next.screen = next.onboarded ? 'home' : 'onboarding';
         return next;
       });
