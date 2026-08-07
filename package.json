@@ -7,6 +7,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:app": "npm --prefix app test",
+    "test:all": "npm test && npm --prefix app test",
     "typecheck": "tsc --noEmit",
     "emulators": "firebase emulators:start --only auth,firestore"
   },

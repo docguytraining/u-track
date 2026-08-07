@@ -1,4 +1,6 @@
+import type { ReactElement } from 'react';
 import { useStore } from './store';
+import { selectScreen, type ScreenKey } from './routing';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
 import { LogVoid } from './screens/LogVoid';
@@ -12,44 +14,31 @@ import { Detail } from './screens/Detail';
 import { Settings } from './screens/Settings';
 import { SignIn } from './screens/SignIn';
 
+const Splash = (
+  <div className="screen" style={{ justifyContent: 'center', alignItems: 'center' }}>
+    <span className="eyebrow">u-track</span>
+  </div>
+);
+
 export function App() {
   const { onboarded, screen, authReady } = useStore();
+  const key = selectScreen({ authReady, onboarded, screen });
 
-  if (!authReady) {
-    return (
-      <div className="app">
-        <div className="screen" style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <span className="eyebrow">u-track</span>
-        </div>
-      </div>
-    );
-  }
+  const screens: Record<ScreenKey, ReactElement> = {
+    splash: Splash,
+    signin: <SignIn />,
+    onboarding: <Onboarding />,
+    void: <LogVoid />,
+    leak: <LogLeak />,
+    change: <LogChange />,
+    drink: <LogDrink />,
+    morning: <Morning />,
+    report: <Report />,
+    chart: <Chart />,
+    detail: <Detail />,
+    settings: <Settings />,
+    home: <Home />,
+  };
 
-  const body = screen === 'signin' ? (
-    <SignIn /> // reachable before onboarding too (the log-in path from the welcome)
-  ) : !onboarded ? (
-    <Onboarding />
-  ) : screen === 'void' ? (
-    <LogVoid />
-  ) : screen === 'leak' ? (
-    <LogLeak />
-  ) : screen === 'change' ? (
-    <LogChange />
-  ) : screen === 'drink' ? (
-    <LogDrink />
-  ) : screen === 'morning' ? (
-    <Morning />
-  ) : screen === 'report' ? (
-    <Report />
-  ) : screen === 'chart' ? (
-    <Chart />
-  ) : screen === 'detail' ? (
-    <Detail />
-  ) : screen === 'settings' ? (
-    <Settings />
-  ) : (
-    <Home />
-  );
-
-  return <div className="app">{body}</div>;
+  return <div className="app">{screens[key]}</div>;
 }
