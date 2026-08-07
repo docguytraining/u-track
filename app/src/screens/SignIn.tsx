@@ -4,8 +4,9 @@ import { Topbar } from '../ui';
 import { signInWithGoogle, signInEmailPassword, createAccount, sendMagicLink, usingEmulator } from '../firebase';
 
 export function SignIn() {
-  const { navigate, entries } = useStore();
+  const { navigate, entries, onboarded } = useStore();
   const localCount = entries.length;
+  const back = () => navigate(onboarded ? 'settings' : 'onboarding');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,7 +55,7 @@ export function SignIn() {
 
   return (
     <div className="screen">
-      <Topbar title="Sign in" onBack={() => navigate('settings')} />
+      <Topbar title="Sign in" onBack={back} />
       <p className="lead">Sync your diary across your phone and iPad. Your data is private to your account.{usingEmulator ? ' (Emulator — any account works.)' : ''}</p>
 
       {localCount > 0 && (
@@ -91,7 +92,7 @@ export function SignIn() {
       {msg && <p className="note" style={{ color: msg.ok ? 'var(--accent)' : 'var(--warn)' }}>{msg.text}</p>}
 
       <div className="spacer-v" />
-      <button className="ghost block center" onClick={() => navigate('settings')}>Cancel — keep using locally</button>
+      <button className="ghost block center" onClick={back}>Cancel</button>
     </div>
   );
 }

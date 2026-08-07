@@ -6,7 +6,7 @@ import { MODULES, MODULE_ORDER, ONBOARD_QUESTIONS, EXPANDED_TRAITS, PRODUCT_TIER
 type Step = 'welcome' | 'symptoms' | 'confirm' | 'depth';
 
 export function Onboarding() {
-  const { completeOnboarding, enabledModules, traits: savedTraits, products } = useStore();
+  const { completeOnboarding, enabledModules, traits: savedTraits, products, navigate } = useStore();
   const rerun = enabledModules.length > 0; // re-running from Settings: skip straight to confirm
   const [step, setStep] = useState<Step>(rerun ? 'confirm' : 'welcome');
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
@@ -56,9 +56,14 @@ export function Onboarding() {
         <div className="spacer-v" />
         {import.meta.env.DEV && <p className="note">Dev build · sample data + reset available in Settings.</p>}
         <p className="note">By continuing, you acknowledge the above and consent to entering health data.</p>
-        <button className="primary block center big" onClick={() => setStep(import.meta.env.DEV ? 'confirm' : 'symptoms')}>
-          I understand — get started
-        </button>
+        <div className="footer-actions">
+          <button className="primary block center big" onClick={() => setStep(import.meta.env.DEV ? 'confirm' : 'symptoms')}>
+            I understand — start new
+          </button>
+          <button className="ghost block center" onClick={() => navigate('signin')}>
+            Already have an account? Log in
+          </button>
+        </div>
       </div>
     );
   }

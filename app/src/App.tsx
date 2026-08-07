@@ -25,7 +25,9 @@ export function App() {
     );
   }
 
-  const body = !onboarded ? (
+  const body = screen === 'signin' ? (
+    <SignIn /> // reachable before onboarding too (the log-in path from the welcome)
+  ) : !onboarded ? (
     <Onboarding />
   ) : screen === 'void' ? (
     <LogVoid />
@@ -45,8 +47,6 @@ export function App() {
     <Detail />
   ) : screen === 'settings' ? (
     <Settings />
-  ) : screen === 'signin' ? (
-    <SignIn />
   ) : (
     <Home />
   );
