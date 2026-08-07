@@ -10,8 +10,11 @@ export function Onboarding() {
   const rerun = enabledModules.length > 0; // re-running from Settings: skip straight to confirm
   const [step, setStep] = useState<Step>(rerun ? 'confirm' : 'welcome');
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
-  // Prototype default: everything on, so you deselect what you don't want.
-  const [selected, setSelected] = useState<string[]>(rerun ? enabledModules : [...MODULE_ORDER]);
+  // Prod: normal flow (symptom questions → inferred, starts empty). Dev: everything on
+  // so you can deselect quickly.
+  const [selected, setSelected] = useState<string[]>(
+    rerun ? enabledModules : import.meta.env.DEV ? [...MODULE_ORDER] : [],
+  );
   const [traits, setTraits] = useState<Record<string, string>>(savedTraits);
   const [tiers, setTiers] = useState<string[]>(
     [...new Set(products.map((p) => p.tier).filter((t): t is string => !!t))],
@@ -53,7 +56,7 @@ export function Onboarding() {
         <div className="spacer-v" />
         {import.meta.env.DEV && <p className="note">Dev build · sample data + reset available in Settings.</p>}
         <p className="note">By continuing, you acknowledge the above and consent to entering health data.</p>
-        <button className="primary block center big" onClick={() => setStep('confirm')}>
+        <button className="primary block center big" onClick={() => setStep(import.meta.env.DEV ? 'confirm' : 'symptoms')}>
           I understand — get started
         </button>
       </div>
@@ -92,9 +95,13 @@ export function Onboarding() {
   if (step === 'confirm') {
     return (
       <div className="screen">
-        <span className="eyebrow">Setup</span>
+        <span className="eyebrow">{import.meta.env.DEV ? 'Setup' : 'Quick setup · 2 of 2'}</span>
         <h2>What should I track?</h2>
-        <p className="lead">Everything’s on for the prototype — turn off anything you don’t need.</p>
+        <p className="lead">
+          {import.meta.env.DEV
+            ? 'Everything’s on — turn off anything you don’t need.'
+            : 'Based on your answers. Tap to add or remove anything.'}
+        </p>
         <div className="list">
           {MODULE_ORDER.map((m) => {
             const def = MODULES[m]!;
