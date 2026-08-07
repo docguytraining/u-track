@@ -3,3 +3,11 @@ dist/
 coverage/
 *.log
 .DS_Store
+
+# Secrets & local env — never commit real values
+.env
+.env.local
+.env.*.local
+
+# Firebase local cache
+.firebase/

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0b0e14"/>
+  <!-- widened vessel — reads as a graduated measuring cup / beaker -->
+  <path d="M148 166 V282 C148 352 188 388 256 388 C324 388 364 352 364 282 V166"
+        fill="none" stroke="#4cc9b0" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- graduation ticks -->
+  <g stroke="#4cc9b0" stroke-width="15" stroke-linecap="round">
+    <line x1="298" y1="214" x2="336" y2="214"/>
+    <line x1="298" y1="260" x2="336" y2="260"/>
+    <line x1="298" y1="306" x2="336" y2="306"/>
+  </g>
+</svg>

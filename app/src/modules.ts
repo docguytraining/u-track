@@ -120,6 +120,25 @@ export const DEFAULT_DRY_WEIGHTS: Record<string, number> = Object.fromEntries(
   PRODUCT_TIERS.map((t) => [t.name, t.grams]),
 );
 
+/**
+ * Drink types for fluid-intake logging (the input side of the frequency-volume
+ * chart). Caffeine and alcohol are flagged because their timing drives nocturia.
+ * The user prunes the list in Settings — no point asking about drinks you never have.
+ */
+export const DRINKS: { name: string; caffeine?: boolean; alcohol?: boolean }[] = [
+  { name: 'Water' },
+  { name: 'Coffee', caffeine: true },
+  { name: 'Tea', caffeine: true },
+  { name: 'Soda', caffeine: true },
+  { name: 'Juice' },
+  { name: 'Milk' },
+  { name: 'Alcohol', alcohol: true },
+  { name: 'Other' },
+];
+export const DEFAULT_DRINK_NAMES = DRINKS.map((d) => d.name);
+export const isCaffeine = (name: string) => !!DRINKS.find((d) => d.name === name)?.caffeine;
+export const isAlcohol = (name: string) => !!DRINKS.find((d) => d.name === name)?.alcohol;
+
 /** Quick-onboarding questions → the QuickOnboardingAnswers keys the core infers from. */
 export const ONBOARD_QUESTIONS: { key: string; prompt: string }[] = [
   { key: 'wakesToUrinateAtNight', prompt: 'Do you wake at night to urinate?' },

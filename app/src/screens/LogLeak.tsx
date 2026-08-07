@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { Topbar, OptionGroup } from '../ui';
+import { Topbar, OptionGroup, WhenField } from '../ui';
 
 export function LogLeak() {
   const { coreQuestions, gatewayQuestions, logLeak, navigate } = useStore();
   const core = coreQuestions('leak');
   const gateway = gatewayQuestions('leak');
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [at, setAt] = useState<number | null>(null);
   const [showMore, setShowMore] = useState(false);
 
   const set = (qid: string, v: string) => setAnswers((a) => ({ ...a, [qid]: v }));
   const done = () => {
-    logLeak(answers);
+    logLeak(answers, at ?? undefined);
     navigate('home');
   };
 
@@ -37,6 +38,8 @@ export function LogLeak() {
         gateway.map((q) => (
           <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
         ))}
+
+      <WhenField value={at} onChange={setAt} />
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={done}>

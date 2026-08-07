@@ -16,6 +16,7 @@ export function Home() {
 
       {/* Fast path: the things you tap to log, front and center. Nothing to read. */}
       <button className="big center block" onClick={() => navigate('void')}>🚽&nbsp; Void</button>
+      <button className="big center block" onClick={() => navigate('drink')}>🥤&nbsp; Drink</button>
       <button className="big center block" onClick={() => navigate('leak')}>💧&nbsp; Leak</button>
       {enabledModules.includes('protection') && (
         <button className="big center block" onClick={() => navigate('change')}>🩲&nbsp; Change</button>

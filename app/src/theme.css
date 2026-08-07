@@ -135,3 +135,19 @@ input.numinput:focus { outline: none; border-color: var(--accent); }
 .note { font-size: 13px; color: var(--muted); }
 .hr { height: 1px; background: var(--line); border: 0; margin: 4px 0; }
 a.link { color: var(--accent); cursor: pointer; }
+
+/* Print: a clean, light, clinician-friendly chart (the takeaway artifact). */
+.print-only { display: none; }
+@media print {
+  .print-hide { display: none !important; }
+  .print-only { display: block; }
+  html, body, #root, .app { background: #fff !important; color: #000 !important; max-width: 100% !important; }
+  .app { padding: 0; }
+  .screen { padding: 0; gap: 8px; }
+  .card { background: #fff !important; border: 1px solid #bbb !important; break-inside: avoid; }
+  h2, h3, .stat .n, .logline b, b { color: #000 !important; }
+  .sub, .note, .lead, .logline span, .stat .u, .eyebrow { color: #333 !important; }
+  .logline { border-bottom: 1px solid #ddd; }
+  .pill { border: 1px solid #999; color: #000 !important; background: #eee !important; }
+  .hr { background: #ccc; }
+}

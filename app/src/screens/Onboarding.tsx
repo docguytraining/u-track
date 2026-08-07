@@ -6,11 +6,15 @@ import { MODULES, MODULE_ORDER, ONBOARD_QUESTIONS, EXPANDED_TRAITS, PRODUCT_TIER
 type Step = 'welcome' | 'symptoms' | 'confirm' | 'depth';
 
 export function Onboarding() {
-  const { completeOnboarding, enabledModules, traits: savedTraits, products } = useStore();
+  const { completeOnboarding, enabledModules, traits: savedTraits, products, navigate } = useStore();
   const rerun = enabledModules.length > 0; // re-running from Settings: skip straight to confirm
   const [step, setStep] = useState<Step>(rerun ? 'confirm' : 'welcome');
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
-  const [selected, setSelected] = useState<string[]>(enabledModules);
+  // Prod: normal flow (symptom questions → inferred, starts empty). Dev: everything on
+  // so you can deselect quickly.
+  const [selected, setSelected] = useState<string[]>(
+    rerun ? enabledModules : import.meta.env.DEV ? [...MODULE_ORDER] : [],
+  );
   const [traits, setTraits] = useState<Record<string, string>>(savedTraits);
   const [tiers, setTiers] = useState<string[]>(
     [...new Set(products.map((p) => p.tier).filter((t): t is string => !!t))],
@@ -42,11 +46,24 @@ export function Onboarding() {
           A few quick questions and the app turns on just what fits you — nothing more. You can
           change it anytime in Settings. Even a little tracking is worth showing a doctor.
         </p>
+        <div className="card" style={{ marginTop: 4 }}>
+          <b>Not a medical device.</b>
+          <div className="sub" style={{ marginTop: 4 }}>
+            u-track helps you record and share bladder-diary data with your clinician. It does not
+            diagnose or treat, and it doesn’t replace medical advice.
+          </div>
+        </div>
         <div className="spacer-v" />
-        <p className="note">Prototype · nothing is saved · everything resets on refresh.</p>
-        <button className="primary block center big" onClick={() => setStep('symptoms')}>
-          Get started
-        </button>
+        {import.meta.env.DEV && <p className="note">Dev build · sample data + reset available in Settings.</p>}
+        <p className="note">By continuing, you acknowledge the above and consent to entering health data.</p>
+        <div className="footer-actions">
+          <button className="primary block center big" onClick={() => setStep(import.meta.env.DEV ? 'confirm' : 'symptoms')}>
+            I understand — start new
+          </button>
+          <button className="ghost block center" onClick={() => navigate('signin')}>
+            Already have an account? Log in
+          </button>
+        </div>
       </div>
     );
   }
@@ -83,9 +100,13 @@ export function Onboarding() {
   if (step === 'confirm') {
     return (
       <div className="screen">
-        <span className="eyebrow">Quick setup · 2 of 2</span>
-        <h2>Here’s what I’ll track for you.</h2>
-        <p className="lead">Based on your answers. Tap to add or remove anything.</p>
+        <span className="eyebrow">{import.meta.env.DEV ? 'Setup' : 'Quick setup · 2 of 2'}</span>
+        <h2>What should I track?</h2>
+        <p className="lead">
+          {import.meta.env.DEV
+            ? 'Everything’s on — turn off anything you don’t need.'
+            : 'Based on your answers. Tap to add or remove anything.'}
+        </p>
         <div className="list">
           {MODULE_ORDER.map((m) => {
             const def = MODULES[m]!;

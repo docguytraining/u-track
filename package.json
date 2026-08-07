@@ -7,7 +7,10 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "test:app": "npm --prefix app test",
+    "test:all": "npm test && npm --prefix app test",
+    "typecheck": "tsc --noEmit",
+    "emulators": "firebase emulators:start --only auth,firestore"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

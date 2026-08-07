@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { weighedVolumeMl } from '@core';
 import { useStore } from '../store';
-import { Topbar, OptionGroup } from '../ui';
+import { Topbar, OptionGroup, WhenField } from '../ui';
+import { fmtVol } from '../units';
 
 export function LogChange() {
-  const { products, logChange, navigate } = useStore();
+  const { products, units, logChange, navigate } = useStore();
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [wet, setWet] = useState('');
   const [fullness, setFullness] = useState('');
+  const [at, setAt] = useState<number | null>(null);
 
   const product = products.find((p) => p.id === productId);
   const wetNum = Number(wet);
   const volumeMl = product && wet !== '' && !Number.isNaN(wetNum) ? weighedVolumeMl(product.dryGrams, wetNum) : null;
 
   const done = () => {
-    logChange({ productId: productId || null, volumeMl, answers: fullness ? { fullness } : {} });
+    logChange({ productId: productId || null, volumeMl, answers: fullness ? { fullness } : {}, at: at ?? undefined });
     navigate('home');
   };
 
@@ -49,7 +51,7 @@ export function LogChange() {
               onChange={(e) => setWet(e.target.value)}
             />
             {volumeMl != null && (
-              <p className="note">{wet}g − {product!.dryGrams}g = <b style={{ color: 'var(--text)' }}>{volumeMl} ml</b> absorbed</p>
+              <p className="note">{wet}g − {product!.dryGrams}g = <b style={{ color: 'var(--text)' }}>{fmtVol(volumeMl, units)}</b> absorbed</p>
             )}
           </div>
 
@@ -60,6 +62,8 @@ export function LogChange() {
           />
         </>
       )}
+
+      <WhenField value={at} onChange={setAt} />
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={done}>Done</button>

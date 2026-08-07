@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { MODULES, PRODUCT_TIERS } from '../modules';
+import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
+import { cloudEnabled, usingEmulator } from '../firebase';
 
 export function Settings() {
-  const { enabledModules, traits, products, entries, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct } = useStore();
+  const { enabledModules, traits, products, drinkTypes, units, entries, user, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
+  const removedDrinks = DEFAULT_DRINK_NAMES.filter((d) => !drinkTypes.includes(d));
   const [tier, setTier] = useState('');
   const [name, setName] = useState('');
   const [dry, setDry] = useState('');
@@ -30,6 +32,28 @@ export function Settings() {
   return (
     <div className="screen">
       <Topbar title="Settings" onBack={() => navigate('home')} />
+
+      <div className="card">
+        <h3>Account</h3>
+        {!cloudEnabled ? (
+          <div className="sub" style={{ marginTop: 6 }}>Cloud sync isn’t configured (no Firebase env). Running local-only.</div>
+        ) : user ? (
+          <>
+            <div className="sub" style={{ marginTop: 6 }}>
+              Signed in as <b style={{ color: 'var(--text)' }}>{user.email ?? user.name ?? 'you'}</b> · syncing{usingEmulator ? ' (emulator)' : ''}.
+            </div>
+            <button className="ghost block center" style={{ marginTop: 10 }} onClick={signOut}>Sign out</button>
+          </>
+        ) : (
+          <>
+            <div className="sub" style={{ marginTop: 6 }}>
+              Using locally — data resets on refresh. Sign in to sync across your phone and iPad.
+              {usingEmulator ? ' (emulator: any fake account works)' : ''}
+            </div>
+            <button className="primary block center" style={{ marginTop: 10 }} onClick={() => navigate('signin')}>Sign in</button>
+          </>
+        )}
+      </div>
 
       <div className="card">
         <h3>Tracking modules</h3>
@@ -87,14 +111,52 @@ export function Settings() {
       )}
 
       <div className="card">
-        <h3>This session</h3>
-        <div className="sub" style={{ marginTop: 6 }}>{entries.length} events logged · in memory only, nothing saved.</div>
+        <h3>Units</h3>
+        <div className="sub" style={{ marginTop: 2 }}>How volumes show and enter. Stored the same either way.</div>
+        <div className="chips" style={{ marginTop: 10 }}>
+          <button className={units === 'oz' ? 'selected' : ''} onClick={() => setUnits('oz')}>Ounces (oz)</button>
+          <button className={units === 'ml' ? 'selected' : ''} onClick={() => setUnits('ml')}>Millilitres (ml)</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Drinks</h3>
+        <div className="sub" style={{ marginTop: 2 }}>Tap to remove types you never drink — they won’t be offered when logging.</div>
+        <div className="chips" style={{ marginTop: 10 }}>
+          {drinkTypes.map((d) => (
+            <button key={d} className="selected" onClick={() => removeDrinkType(d)}>{d} ✕</button>
+          ))}
+        </div>
+        {removedDrinks.length > 0 && (
+          <>
+            <div className="sub" style={{ marginTop: 12, marginBottom: 6 }}>Removed — tap to add back:</div>
+            <div className="chips">
+              {removedDrinks.map((d) => (
+                <button key={d} className="ghost" onClick={() => addDrinkType(d)}>+ {d}</button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>Your data</h3>
+        <div className="sub" style={{ marginTop: 6 }}>
+          {entries.length} events · {user ? 'synced to your account' : 'on this device only — sign in to save'}.
+        </div>
       </div>
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={rerunOnboarding}>Re-run onboarding</button>
-      <button className="block center" onClick={loadSample}>Load a sample measured night</button>
-      <button className="ghost block center danger" onClick={reset}>Reset everything (start over)</button>
+      {import.meta.env.DEV && <button className="block center" onClick={loadSample}>Load a few weeks of sample data</button>}
+      <button
+        className="ghost block center danger"
+        onClick={() => {
+          if (import.meta.env.DEV || window.confirm('Delete all your data and start over? This can’t be undone.')) reset();
+        }}
+      >
+        Reset everything (start over)
+      </button>
     </div>
   );
 }

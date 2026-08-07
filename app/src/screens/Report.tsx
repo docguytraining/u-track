@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, changesOf, isWetNight, isDryNight, tally, share } from '../insights';
+import { voidedVolumeStats } from '@core';
+import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
+import { isCaffeine, isAlcohol } from '../modules';
+import { fmtVol } from '../units';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
   return (
@@ -20,12 +23,20 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 );
 
 export function Report() {
-  const { entries, enabledModules, reports, navigate, openDetail, loadSample } = useStore();
+  const { entries, enabledModules, drinkTypes, units, reports, navigate, openDetail, loadSample } = useStore();
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
   const changes = changesOf(entries);
+  const drinks = drinksOf(entries);
   const has = (m: string) => enabledModules.includes(m);
+
+  const intakeMl = drinks.reduce((s, d) => s + (d.volumeMl ?? 0), 0);
+  const eveningMl = drinks.filter((d) => new Date(d.at).getHours() >= 18).reduce((s, d) => s + (d.volumeMl ?? 0), 0);
+  const caffeineN = drinks.filter((d) => isCaffeine(d.type)).length;
+  const alcoholN = drinks.filter((d) => isAlcohol(d.type)).length;
+  const showCaffeine = drinkTypes.some(isCaffeine);
+  const showAlcohol = drinkTypes.some(isAlcohol);
   const { trend, measured } = reports;
 
   const streamShare = share(voids, 'stream', ['Weak', 'Dribble']);
@@ -39,10 +50,30 @@ export function Report() {
   const dryNights = nights.filter(isDryNight).length;
   const absorbedMl = changes.reduce((sum, c) => sum + (c.volumeMl ?? 0), 0);
 
+  const cap = voidedVolumeStats(voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl })));
+  const qualityPct = cap.voids ? Math.round((cap.measured / cap.voids) * 100) : 0;
+  const measuredDays = groupByDay(entries).filter((d) => d.night && d.voids.length > 0 && d.voids.every((v) => v.volumeMl != null)).length;
+
   return (
     <div className="screen">
       <Topbar title="Report" onBack={() => navigate('home')} />
       <p className="lead">Tap any card to see the data behind it.</p>
+
+      <button className="primary block center" onClick={() => navigate('chart')}>
+        📄 Frequency-volume chart · {measuredDays} of 3 measured days
+      </button>
+      {cap.voids > 0 && (
+        <div className={qualityPct === 100 ? 'pill ok' : 'pill warn'} style={{ alignSelf: 'flex-start' }}>
+          Data quality: {cap.measured} of {cap.voids} voids measured ({qualityPct}%)
+        </div>
+      )}
+
+      <Card title="Bladder capacity" onClick={() => navigate('chart')}>
+        <div className="grid">
+          <Metric n={fmtVol(cap.maxMl, units)} label="functional (max void)" />
+          <Metric n={fmtVol(cap.averageMl, units)} label="average void" />
+        </div>
+      </Card>
 
       <Card title="Activity" onClick={() => openDetail('log')}>
         <div className="grid">
@@ -50,6 +81,15 @@ export function Report() {
           <Metric n={leaks.length} label="leaks" />
           <Metric n={nights.length} label="nights" />
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
+        </div>
+      </Card>
+
+      <Card title="Fluids" onClick={() => openDetail('drinks')}>
+        <div className="grid">
+          <Metric n={intakeMl > 0 ? fmtVol(intakeMl, units) : '—'} label="intake today" />
+          <Metric n={eveningMl > 0 ? fmtVol(eveningMl, units) : '—'} label="after 6pm" />
+          {showCaffeine && <Metric n={caffeineN} label="caffeine drinks" />}
+          {showAlcohol && <Metric n={alcoholN} label="alcohol drinks" />}
         </div>
       </Card>
 
@@ -73,7 +113,7 @@ export function Report() {
         <Card title="Protection" onClick={() => openDetail('changes')}>
           <div className="grid">
             <Metric n={changes.length} label="changes" />
-            <Metric n={absorbedMl > 0 ? `${absorbedMl}` : '—'} label="ml absorbed" />
+            <Metric n={absorbedMl > 0 ? fmtVol(absorbedMl, units) : '—'} label="absorbed" />
           </div>
         </Card>
       )}
@@ -97,8 +137,10 @@ export function Report() {
       )}
 
       <div className="spacer-v" />
-      {entries.length === 0 && <p className="note">No data yet. Log a few events — or load a sample night below.</p>}
-      <button className="ghost block center" onClick={loadSample}>Load a sample measured night</button>
+      {entries.length === 0 && (
+        <p className="note">No data yet — log a few events{import.meta.env.DEV ? ' or load sample data below' : ''}.</p>
+      )}
+      {import.meta.env.DEV && <button className="ghost block center" onClick={loadSample}>Load a few weeks of sample data</button>}
     </div>
   );
 }
