@@ -188,15 +188,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const snap = await getDoc(doc(db, 'users', u.uid));
         data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
       } catch { /* offline or rules-denied — treat as empty; never fall back to prior state */ }
-      setState(() => {
-        // SECURITY (multi-tenant): every signed-in session starts from clean defaults —
-        // never the previous session's state — so one user can NEVER see another's data
-        // (or their own guest data). Only this user's own cloud doc populates it.
+      setState((s) => {
+        // Start from clean defaults (so another user's session can never linger).
         const next: State = { ...initial, user: { uid: u.uid, name: u.displayName, email: u.email }, authReady: true };
         if (data) {
+          // Returning account: load ONLY this user's own cloud doc — no local carryover,
+          // so a user never sees another account's data.
           for (const k of PERSIST_KEYS) {
             if (data[k] !== undefined) (next as Record<string, unknown>)[k] = data[k];
           }
+        } else {
+          // First sign-in for this account (no cloud doc yet): migrate the current
+          // local/guest data IN, so signing in SAVES your work instead of deleting it.
+          for (const k of PERSIST_KEYS) (next as Record<string, unknown>)[k] = s[k];
         }
         next.screen = next.onboarded ? 'home' : 'onboarding';
         return next;
