@@ -56,7 +56,8 @@ export function VolumeField({
   onChange: (v: number | null) => void;
   products?: Product[];
 }) {
-  const { units } = useStore();
+  const { units, enabledModules } = useStore();
+  const canWeigh = products.length > 0 && enabledModules.includes('protection');
   const [mode, setMode] = useState<'quick' | 'weigh'>('quick');
   const [productId, setProductId] = useState('');
   const [wet, setWet] = useState('');
@@ -83,7 +84,7 @@ export function VolumeField({
               </button>
             ))}
           </div>
-          {products.length > 0 && (
+          {canWeigh && (
             <button className="ghost block center" onClick={() => setMode('weigh')}>
               Weigh a product instead
             </button>

@@ -140,14 +140,23 @@ export function Settings() {
       </div>
 
       <div className="card">
-        <h3>This session</h3>
-        <div className="sub" style={{ marginTop: 6 }}>{entries.length} events logged · in memory only, nothing saved.</div>
+        <h3>Your data</h3>
+        <div className="sub" style={{ marginTop: 6 }}>
+          {entries.length} events · {user ? 'synced to your account' : 'on this device only — sign in to save'}.
+        </div>
       </div>
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={rerunOnboarding}>Re-run onboarding</button>
-      <button className="block center" onClick={loadSample}>Load a few weeks of sample data</button>
-      <button className="ghost block center danger" onClick={reset}>Reset everything (start over)</button>
+      {import.meta.env.DEV && <button className="block center" onClick={loadSample}>Load a few weeks of sample data</button>}
+      <button
+        className="ghost block center danger"
+        onClick={() => {
+          if (import.meta.env.DEV || window.confirm('Delete all your data and start over? This can’t be undone.')) reset();
+        }}
+      >
+        Reset everything (start over)
+      </button>
     </div>
   );
 }

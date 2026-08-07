@@ -51,7 +51,7 @@ export function Onboarding() {
           </div>
         </div>
         <div className="spacer-v" />
-        <p className="note">Prototype · nothing is saved · everything resets on refresh.</p>
+        {import.meta.env.DEV && <p className="note">Dev build · sample data + reset available in Settings.</p>}
         <p className="note">By continuing, you acknowledge the above and consent to entering health data.</p>
         <button className="primary block center big" onClick={() => setStep('confirm')}>
           I understand — get started

@@ -339,7 +339,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
           return { ...s, entries: [...s.entries, ...out], measuredDay: true };
         }),
-      reset: () => setState({ ...initial }),
+      // Clear all diary data but stay signed in (persisted → also clears the cloud doc).
+      reset: () => setState((s) => ({ ...initial, user: s.user, authReady: true })),
       enabledModuleDefs: state.enabledModules.map((m) => MODULES[m]).filter((m): m is ModuleDef => !!m),
       coreQuestions: (surface) =>
         composeCore(trackingModules(state.enabledModules), surface) as AppQuestion[],
