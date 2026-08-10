@@ -58,10 +58,11 @@ export const MODULES: Record<string, ModuleDef> = {
     blurb: 'Daytime leaks and triggers',
     widget: 'Leaks & triggers',
     questions: [
-      q('leakSeverity', 'leak', true, 80, 'How much?', ['Damp', 'Moderate', 'Soaked']),
-      q('leakTrigger', 'leak', true, 70, 'What set it off?', ['Urge', 'Cough / lift', 'Couldn’t reach', 'Unsure']),
-      // Point-in-time: about THIS leak, so no "sometimes" (that's a trait — see awareness).
-      q('leakAwareness', 'leak', false, 40, 'Did you feel this one happening?', ['Felt the urge first', 'Found out after', 'Unsure']),
+      q('leakSeverity', 'leak', true, 80, 'How much leaked?', ['Damp', 'Moderate', 'Soaked']),
+      q('leakTrigger', 'leak', true, 70, 'What set it off?', ['Urge', 'Cough / sneeze', 'Laughing', 'Other', 'N/A']),
+      // Sensation only — did you feel it happen? Urge vs stress is the trigger's job, so no
+      // "urge" wording here (a cough leak has no urge). Point-in-time, so no "sometimes".
+      q('leakAwareness', 'leak', false, 40, 'Did you feel it happen?', ['Felt it', 'Found out after', 'Unsure']),
     ],
   },
   nocturia: {

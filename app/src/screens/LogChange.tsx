@@ -46,7 +46,7 @@ export function LogChange() {
       ) : (
         <>
           <div className="field">
-            <label>Which product?</label>
+            <label>Which product did you take off?</label>
             <div className="chips">
               {products.map((p) => (
                 <button key={p.id} className={productId === p.id ? 'selected' : ''} onClick={() => setProductId(p.id)}>

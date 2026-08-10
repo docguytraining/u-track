@@ -22,6 +22,8 @@ export function LogVoid() {
   const gateway = gatewayQuestions('void');
   const urgencyQ = core.find((q) => q.id === 'urgency'); // ties urgency to a product void too
   const leakCore = coreQuestions('leak');
+  const triggerQ = leakCore.find((q) => q.id === 'leakTrigger'); // why it happened — always relevant
+  const severityQ = leakCore.find((q) => q.id === 'leakSeverity'); // how much *leaked* — only if it did
   const leakGateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
@@ -70,6 +72,9 @@ export function LogVoid() {
         />
       )}
 
+      {/* Nothing else appears until we know where it went — one question at a time. */}
+      {(!askDest || dest !== '') && (
+      <>
       {intoProduct ? (
         <>
           <p className="note" style={{ marginTop: -4 }}>
@@ -90,15 +95,17 @@ export function LogVoid() {
           )}
 
           {urgencyQ && <OptionGroup question={urgencyQ} value={answers[urgencyQ.id]} onChange={(v) => set(urgencyQ.id, v)} />}
-          {leakCore.map((q) => (
-            <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
-          ))}
+          {triggerQ && <OptionGroup question={triggerQ} value={answers[triggerQ.id]} onChange={(v) => set(triggerQ.id, v)} />}
 
+          {/* Escape is its own axis; "how much leaked" only makes sense once something did. */}
           <OptionGroup
             question={{ id: 'leaked', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Did any leak through — onto clothing or the bed?', options: ['No', 'Yes'] }}
             value={leaked}
             onChange={setLeaked}
           />
+          {leaked === 'Yes' && severityQ && (
+            <OptionGroup question={severityQ} value={answers[severityQ.id]} onChange={(v) => set(severityQ.id, v)} />
+          )}
 
           {!showMore && (
             <button className="ghost block center" onClick={() => setShowMore(true)}>Track anything else?</button>
@@ -161,6 +168,8 @@ export function LogVoid() {
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={done}>Done</button>
+      </>
+      )}
     </div>
   );
 }
