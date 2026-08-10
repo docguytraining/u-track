@@ -20,7 +20,7 @@ export function LogDrink() {
 
   return (
     <div className="screen">
-      <Topbar title="Drink logged ✓" onBack={() => navigate('home')} />
+      <Topbar title="Log a drink" onBack={() => navigate('home')} />
       <p className="lead">The input side of the chart — evening and caffeine timing matter for nights.</p>
 
       <div className="field">

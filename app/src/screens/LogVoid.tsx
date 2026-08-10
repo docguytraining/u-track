@@ -61,8 +61,8 @@ export function LogVoid() {
 
   return (
     <div className="screen">
-      <Topbar title={intoProduct ? 'Logged ✓' : 'Void logged ✓'} onBack={() => navigate('home')} />
-      <p className="lead">Timestamped. That alone is complete — add detail only if you want.</p>
+      <Topbar title="Log a void" onBack={() => navigate('home')} />
+      <p className="lead">Add a detail if you want — then tap Done to log it.</p>
 
       {askDest && (
         <OptionGroup

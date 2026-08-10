@@ -20,8 +20,8 @@ export function LogLeak() {
 
   return (
     <div className="screen">
-      <Topbar title="Leak logged ✓" onBack={() => navigate('home')} />
-      <p className="lead">Logged. Add a detail or two if you want — or just hit Done.</p>
+      <Topbar title="Log a leak" onBack={() => navigate('home')} />
+      <p className="lead">Add a detail or two if you want — then hit Done.</p>
 
       {core.map((q) => (
         <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
