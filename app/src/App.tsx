@@ -6,7 +6,6 @@ import { Home } from './screens/Home';
 import { LogVoid } from './screens/LogVoid';
 import { LogLeak } from './screens/LogLeak';
 import { LogChange } from './screens/LogChange';
-import { LogWet } from './screens/LogWet';
 import { LogDrink } from './screens/LogDrink';
 import { Morning } from './screens/Morning';
 import { Report } from './screens/Report';
@@ -32,7 +31,6 @@ export function App() {
     void: <LogVoid />,
     leak: <LogLeak />,
     change: <LogChange />,
-    wet: <LogWet />,
     drink: <LogDrink />,
     morning: <Morning />,
     report: <Report />,

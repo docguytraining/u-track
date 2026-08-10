@@ -68,7 +68,7 @@ export function Detail() {
             case 'change':
               return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} />;
             case 'wetting':
-              return <Row key={e.id} left={<><Stamp icon="wet" at={e.at} />{e.productId ? <> · {productName(e.productId)}</> : null}</>} right={ans(e.answers, ['amount', 'wetAwareness'])} />;
+              return <Row key={e.id} left={<><Stamp icon="wet" at={e.at} />{e.productId ? <> · {productName(e.productId)}</> : null}</>} right={ans(e.answers, ['leakSeverity', 'leakTrigger'])} />;
             case 'drink':
               return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} />;
             case 'night':
@@ -193,7 +193,7 @@ export function Detail() {
                   <Row
                     key={w.id}
                     left={`${dateStr(w.at)} ${timeStr(w.at)}`}
-                    right={ans(w.answers, ['amount', 'wetAwareness'])}
+                    right={ans(w.answers, ['leakSeverity', 'leakTrigger'])}
                   />
                 ))}
             </div>

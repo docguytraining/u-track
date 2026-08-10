@@ -30,7 +30,7 @@ export interface AppUser {
   email: string | null;
 }
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'wet' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
 
 export interface VoidEntry {
   kind: 'void';
@@ -352,8 +352,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             // Daytime wettings into the product that didn't merit a change — these feed
             // voiding frequency, not volume (the next change's weight already has the fluid).
             if (isWet) {
-              out.push({ kind: 'wetting', id: id(), at: day0 + 10 * H + (i % 5) * MIN, productId: null, answers: { amount: 'A little', wetAwareness: 'Found out after' } });
-              if (i % 2 === 0) out.push({ kind: 'wetting', id: id(), at: day0 + 16 * H, productId: null, answers: { amount: 'Moderate', wetAwareness: 'Felt it happen' } });
+              out.push({ kind: 'wetting', id: id(), at: day0 + 10 * H + (i % 5) * MIN, productId: null, answers: { destination: 'Product', leakSeverity: 'Damp', leakTrigger: 'Unsure' } });
+              if (i % 2 === 0) out.push({ kind: 'wetting', id: id(), at: day0 + 16 * H, productId: null, answers: { destination: 'Both', leakSeverity: 'Moderate', leakTrigger: 'Urge' } });
             }
             if (i % 4 === 0) out.push({ kind: 'leak', id: id(), at: day0 + 14 * H, answers: { leakSeverity: 'Damp', leakTrigger: i % 8 === 0 ? 'Cough / lift' : 'Urge' } });
           }

@@ -20,10 +20,7 @@ export function Home() {
       <button className="big center block" onClick={() => navigate('drink')}><Icon name="drink" /> Drink</button>
       <button className="big center block" onClick={() => navigate('leak')}><Icon name="leak" /> Leak</button>
       {enabledModules.includes('protection') && (
-        <>
-          <button className="big center block" onClick={() => navigate('wet')}><Icon name="wet" /> Wet — no change</button>
-          <button className="big center block" onClick={() => navigate('change')}><Icon name="change" /> Change</button>
-        </>
+        <button className="big center block" onClick={() => navigate('change')}><Icon name="change" /> Change</button>
       )}
       <button className="big center block" onClick={() => navigate('morning')}><Icon name="morning" /> Morning check-in</button>
 
