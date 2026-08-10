@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 
@@ -25,6 +25,7 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, navigate, openDetail, loadSample } = useStore();
   const voids = voidsOf(entries);
+  const toiletVoids = toiletVoidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
   const changes = changesOf(entries);
@@ -53,9 +54,11 @@ export function Report() {
   // Voiding frequency is honest only when wettings-into-protection are counted alongside
   // toilet voids — each is a bladder emptying, whatever it landed in.
   const daysSpan = groupByDay(entries).length || 1;
-  const emptyingsPerDay = (voids.length + wettings.length) / daysSpan;
+  // Every void is one emptying (toilet, product, or escaped) — count each once.
+  const emptyingsPerDay = voids.length / daysSpan;
 
-  const cap = voidedVolumeStats(voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl })));
+  // Capacity/quality is about measured toilet voids only — product/leak voids carry no ml.
+  const cap = voidedVolumeStats(toiletVoids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl })));
   const qualityPct = cap.voids ? Math.round((cap.measured / cap.voids) * 100) : 0;
   const measuredDays = groupByDay(entries).filter((d) => d.night && d.voids.length > 0 && d.voids.every((v) => v.volumeMl != null)).length;
 
@@ -82,7 +85,7 @@ export function Report() {
 
       <Card title="Activity" onClick={() => openDetail('log')}>
         <div className="grid">
-          <Metric n={voids.length} label="voids" />
+          <Metric n={toiletVoids.length} label="voids" />
           <Metric n={leaks.length} label="leaks" />
           {wettings.length > 0 && <Metric n={wettings.length} label="wettings" />}
           <Metric n={nights.length} label="nights" />

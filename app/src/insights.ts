@@ -1,11 +1,16 @@
 import type { SleepPeriod } from '@core';
-import type { LogEntry, VoidEntry, LeakEntry, NightEntry, ChangeEntry, WettingEntry, DrinkEntry } from './store';
+import type { LogEntry, VoidEntry, NightEntry, ChangeEntry, DrinkEntry } from './store';
 
+/** Every bladder emptying, whatever its destination — the base for frequency. */
 export const voidsOf = (e: readonly LogEntry[]) => e.filter((x): x is VoidEntry => x.kind === 'void');
-export const leaksOf = (e: readonly LogEntry[]) => e.filter((x): x is LeakEntry => x.kind === 'leak');
+/** Voids that reached the toilet — the bathroom trips that feed capacity/nocturia/NUV. */
+export const toiletVoidsOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.where === 'toilet' || v.where === 'both');
+/** Voids where some urine escaped containment — the leaks (product breach, or none worn). */
+export const leaksOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.leaked);
+/** Voids that went into protection — the "wettings" (into a product). */
+export const wettingsOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.where === 'product' || v.where === 'both');
 export const nightsOf = (e: readonly LogEntry[]) => e.filter((x): x is NightEntry => x.kind === 'night');
 export const changesOf = (e: readonly LogEntry[]) => e.filter((x): x is ChangeEntry => x.kind === 'change');
-export const wettingsOf = (e: readonly LogEntry[]) => e.filter((x): x is WettingEntry => x.kind === 'wetting');
 export const drinksOf = (e: readonly LogEntry[]) => e.filter((x): x is DrinkEntry => x.kind === 'drink');
 
 /**
@@ -80,10 +85,12 @@ export const humanize = (key: string) => {
 /** One calendar day's entries, for the frequency-volume chart and multi-day trends. */
 export interface DayGroup {
   day: string; // YYYY-MM-DD (local)
+  /** Toilet-reaching voids only — the bathroom trips the frequency-volume chart plots. */
   voids: VoidEntry[];
   drinks: DrinkEntry[];
   changes: ChangeEntry[];
-  wettings: WettingEntry[];
+  /** Voids that went into a product (the "wettings"). */
+  wettings: VoidEntry[];
   night?: NightEntry;
 }
 
@@ -93,10 +100,12 @@ export function groupByDay(entries: readonly LogEntry[]): DayGroup[] {
   const get = (day: string): DayGroup =>
     byDay.get(day) ?? byDay.set(day, { day, voids: [], drinks: [], changes: [], wettings: [] }).get(day)!;
   for (const e of entries) {
-    if (e.kind === 'void') get(dayKeyOf(e.at)).voids.push(e);
-    else if (e.kind === 'drink') get(dayKeyOf(e.at)).drinks.push(e);
+    if (e.kind === 'void') {
+      // A "both" void is a bathroom trip AND a product wetting — it lands in each bucket.
+      if (e.where === 'toilet' || e.where === 'both') get(dayKeyOf(e.at)).voids.push(e);
+      if (e.where === 'product' || e.where === 'both') get(dayKeyOf(e.at)).wettings.push(e);
+    } else if (e.kind === 'drink') get(dayKeyOf(e.at)).drinks.push(e);
     else if (e.kind === 'change') get(dayKeyOf(e.at)).changes.push(e);
-    else if (e.kind === 'wetting') get(dayKeyOf(e.at)).wettings.push(e);
     else if (e.kind === 'night') get(dayKeyOf(e.rising)).night = e;
   }
   return [...byDay.values()].sort((a, b) => (a.day < b.day ? 1 : -1));

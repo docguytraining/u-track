@@ -8,7 +8,7 @@ import {
 } from '@core';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { groupByDay, voidsOf, changesOf, isWetNight, dateStr, timeStr } from '../insights';
+import { groupByDay, toiletVoidsOf, changesOf, isWetNight, dateStr, timeStr } from '../insights';
 import { fmtVol } from '../units';
 
 const Row = ({ left, right }: { left: string; right: string }) => (
@@ -30,7 +30,7 @@ export function Chart() {
   const inRange = entries.filter((e) => (e.kind === 'night' ? e.rising : e.at) >= cutoff);
 
   const days = groupByDay(inRange);
-  const voids = voidsOf(inRange);
+  const voids = toiletVoidsOf(inRange);
   const changes = changesOf(inRange);
   const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
   const volumeEvents: VoidEvent[] = [...coreVoids, ...changes.map((c) => ({ id: c.id, at: c.at, volumeMl: c.volumeMl }))];

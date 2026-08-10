@@ -4,56 +4,56 @@ import { sometimesMissesToilet, awarenessReduced } from '../insights';
 import { Topbar, OptionGroup, VolumeField, WhenField } from '../ui';
 
 /**
- * One entry point for "I emptied my bladder." For someone who wears protection and whose
- * profile shows they sometimes don't reach the toilet, the first question is where it
- * went, and the flow fans out from there:
- *   • Toilet   → a normal continent void.
- *   • Product  → all into protection → a wetting (an incontinence episode).
- *   • Both     → some in the toilet, some in the product → a void AND a wetting.
- *
- * A wetting is an incontinence episode, so it borrows the leak surface's questions. The
- * MAIN questions on any surface are the ones tied to a diagnostic instrument (here the
- * leak severity + trigger, the ICIQ items); everything else — awareness, whether you
- * changed the product, its fullness — is optional and lives behind "Track anything else?",
- * never required.
+ * One entry point for a void — a bladder emptying. For someone who wears protection and
+ * whose profile shows they sometimes don't reach the toilet, it asks where it ended up
+ * and records a single void with that fact attached:
+ *   • Toilet   → a normal continent void (measured volume).
+ *   • Product  → into protection; perceived size (can't weigh mid-product); may have leaked.
+ *   • Both     → some reached the toilet (measured) and some the product.
+ * The product/both paths can also log a change in the same step. Escape (leaking) is its
+ * own axis, asked on the product paths where it's the product-adequacy signal; the Leak
+ * button on the home screen is the fast path for a pure escape.
  */
+const SIZES = ['Small', 'Medium', 'Large'];
+
 export function LogVoid() {
-  const { coreQuestions, gatewayQuestions, measuredDay, logVoid, logWetting, logChange, navigate, products, enabledModules, traits } = useStore();
+  const { coreQuestions, gatewayQuestions, measuredDay, logVoid, logChange, navigate, products, enabledModules, traits } = useStore();
   const core = coreQuestions('void');
   const gateway = gatewayQuestions('void');
-  // A wetting is a leak-family event — its instrument-tied questions come from that surface.
+  const urgencyQ = core.find((q) => q.id === 'urgency'); // ties urgency to a product void too
   const leakCore = coreQuestions('leak');
-  // The awareness question only earns its place for reduced-sensation profiles.
   const leakGateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
+  const [size, setSize] = useState('');
   const [at, setAt] = useState<number | null>(null);
   const [showMore, setShowMore] = useState(false);
 
-  // Only branch when the profile says voids sometimes don't reach the toilet — otherwise
-  // a fully continent person gets an irrelevant question on every void.
   const askDest = sometimesMissesToilet(enabledModules, traits);
   const [dest, setDest] = useState('');
   const [productId, setProductId] = useState(products[0]?.id ?? '');
+  const [leaked, setLeaked] = useState('');
   const [changed, setChanged] = useState('');
   const [fullness, setFullness] = useState('');
 
   const both = dest === 'Both';
   const intoProduct = dest === 'Product' || both;
+  const where = !askDest || dest === 'Toilet' ? 'toilet' : both ? 'both' : intoProduct ? 'product' : 'toilet';
 
   const set = (qid: string, v: string) => setAnswers((a) => ({ ...a, [qid]: v }));
   const done = () => {
     const t = at ?? undefined;
-    if (intoProduct) {
-      // Into protection → a wetting: no volume, feeds frequency not volume.
-      logWetting({ productId: productId || null, answers: { destination: dest, ...answers }, at: t });
-      // Both → the toilet caught some of it: record that continent portion as a void.
-      if (both) logVoid({ volumeMl, answers: {}, at: t });
-      // Changed the product in the same moment → also a change (the "double up").
-      if (changed === 'Yes') logChange({ productId: productId || null, volumeMl: null, answers: fullness ? { fullness } : {}, at: t });
-    } else {
-      logVoid({ volumeMl, answers, at: t });
-    }
+    logVoid({
+      where,
+      leaked: leaked === 'Yes',
+      // Measured volume only when the toilet caught it; a product void carries a perceived size.
+      volumeMl: intoProduct && !both ? null : volumeMl,
+      size: intoProduct ? size || null : null,
+      productId: intoProduct ? productId || null : null,
+      answers,
+      at: t,
+    });
+    if (intoProduct && changed === 'Yes') logChange({ productId: productId || null, volumeMl: null, answers: fullness ? { fullness } : {}, at: t });
     navigate('home');
   };
 
@@ -73,49 +73,51 @@ export function LogVoid() {
       {intoProduct ? (
         <>
           <p className="note" style={{ marginTop: -4 }}>
-            {both
-              ? 'Some in the toilet, some in your protection — logging both, so your frequency stays honest.'
-              : 'Into your protection — logged as a wetting: it counts toward how often you go, not toward volume.'}
+            {both ? 'Some in the toilet, some in your protection.' : 'Into your protection.'} It counts toward how often you go.
           </p>
 
-          {/* Both → the toilet portion is a real (partial) void; its volume feeds the chart. */}
-          {both && (
+          {both ? (
             <>
               <p className="note" style={{ marginBottom: -4 }}>How much reached the toilet? — optional</p>
               <VolumeField valueMl={volumeMl} onChange={setVolumeMl} products={products} />
             </>
+          ) : (
+            <OptionGroup
+              question={{ id: 'size', surface: 'void', coreEligible: false, priority: 0, prompt: 'How big was it? — optional', options: SIZES }}
+              value={size}
+              onChange={setSize}
+            />
           )}
 
-          {/* Main: the incontinence-episode questions tied to the instrument. */}
+          {urgencyQ && <OptionGroup question={urgencyQ} value={answers[urgencyQ.id]} onChange={(v) => set(urgencyQ.id, v)} />}
           {leakCore.map((q) => (
             <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
           ))}
 
-          {/* Additional: optional, never required — awareness, and whether you changed. */}
+          <OptionGroup
+            question={{ id: 'leaked', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Did any leak through — onto clothing or the bed?', options: ['No', 'Yes'] }}
+            value={leaked}
+            onChange={setLeaked}
+          />
+
           {!showMore && (
-            <button className="ghost block center" onClick={() => setShowMore(true)}>
-              Track anything else?
-            </button>
+            <button className="ghost block center" onClick={() => setShowMore(true)}>Track anything else?</button>
           )}
           {showMore && (
             <>
               {leakGateway.map((q) => (
                 <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
               ))}
-
               {products.length > 1 && (
                 <div className="field">
                   <label>Which product? — optional</label>
                   <div className="chips">
                     {products.map((p) => (
-                      <button key={p.id} className={productId === p.id ? 'selected' : ''} onClick={() => setProductId(p.id)}>
-                        {p.name}
-                      </button>
+                      <button key={p.id} className={productId === p.id ? 'selected' : ''} onClick={() => setProductId(p.id)}>{p.name}</button>
                     ))}
                   </div>
                 </div>
               )}
-
               <OptionGroup
                 question={{ id: 'changed', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Did you change the product?', options: ['Yes', 'No'] }}
                 value={changed}
@@ -149,20 +151,16 @@ export function LogVoid() {
               Track anything else? ({gateway.length})
             </button>
           )}
-
-          {showMore &&
-            gateway.map((q) => (
-              <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
-            ))}
+          {showMore && gateway.map((q) => (
+            <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
+          ))}
         </>
       )}
 
       <WhenField value={at} onChange={setAt} />
 
       <div className="spacer-v" />
-      <button className="primary block center" onClick={done}>
-        Done
-      </button>
+      <button className="primary block center" onClick={done}>Done</button>
     </div>
   );
 }

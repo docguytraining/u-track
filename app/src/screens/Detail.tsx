@@ -61,14 +61,22 @@ export function Detail() {
           // (e.g. treating a drink, which has no `answers`, as a night) throws and blanks
           // the whole screen, so this switch stays exhaustive.
           switch (e.kind) {
-            case 'void':
-              return <Row key={e.id} left={<Stamp icon="void" at={e.at} />} right={`${vol(e.volumeMl)}${ans(e.answers, ['urgency', 'stream']) !== '—' ? ` · ${ans(e.answers, ['urgency', 'stream'])}` : ''}`} />;
-            case 'leak':
-              return <Row key={e.id} left={<Stamp icon="leak" at={e.at} />} right={ans(e.answers, ['leakSeverity', 'leakTrigger'])} />;
+            case 'void': {
+              // One void, three faces: escape → leak icon; into a product → wet; else toilet.
+              const product = e.where === 'product' || e.where === 'both';
+              const reachedToilet = e.where === 'toilet' || e.where === 'both';
+              const icon: IconName = e.leaked ? 'leak' : product ? 'wet' : 'void';
+              const label = product && e.productId ? <> · {productName(e.productId)}</> : null;
+              const parts: string[] = [];
+              if (reachedToilet && e.volumeMl != null) parts.push(vol(e.volumeMl));
+              else if (e.where === 'product' && e.size) parts.push(e.size);
+              const a = ans(e.answers, ['urgency', 'leakSeverity', 'leakTrigger', 'stream']);
+              if (a !== '—') parts.push(a);
+              if (e.leaked) parts.push('leaked');
+              return <Row key={e.id} left={<><Stamp icon={icon} at={e.at} />{label}</>} right={parts.join(' · ') || '—'} />;
+            }
             case 'change':
               return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} />;
-            case 'wetting':
-              return <Row key={e.id} left={<><Stamp icon="wet" at={e.at} />{e.productId ? <> · {productName(e.productId)}</> : null}</>} right={ans(e.answers, ['leakSeverity', 'leakTrigger'])} />;
             case 'drink':
               return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} />;
             case 'night':
