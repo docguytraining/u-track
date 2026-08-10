@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
+import { voidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 
@@ -28,6 +28,7 @@ export function Report() {
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
   const changes = changesOf(entries);
+  const wettings = wettingsOf(entries);
   const drinks = drinksOf(entries);
   const has = (m: string) => enabledModules.includes(m);
 
@@ -49,6 +50,10 @@ export function Report() {
   const wetNights = nights.filter(isWetNight).length;
   const dryNights = nights.filter(isDryNight).length;
   const absorbedMl = changes.reduce((sum, c) => sum + (c.volumeMl ?? 0), 0);
+  // Voiding frequency is honest only when wettings-into-protection are counted alongside
+  // toilet voids — each is a bladder emptying, whatever it landed in.
+  const daysSpan = groupByDay(entries).length || 1;
+  const emptyingsPerDay = (voids.length + wettings.length) / daysSpan;
 
   const cap = voidedVolumeStats(voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl })));
   const qualityPct = cap.voids ? Math.round((cap.measured / cap.voids) * 100) : 0;
@@ -79,6 +84,7 @@ export function Report() {
         <div className="grid">
           <Metric n={voids.length} label="voids" />
           <Metric n={leaks.length} label="leaks" />
+          {wettings.length > 0 && <Metric n={wettings.length} label="wettings" />}
           <Metric n={nights.length} label="nights" />
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
         </div>
@@ -113,8 +119,15 @@ export function Report() {
         <Card title="Protection" onClick={() => openDetail('changes')}>
           <div className="grid">
             <Metric n={changes.length} label="changes" />
+            <Metric n={wettings.length} label="wettings" />
             <Metric n={absorbedMl > 0 ? fmtVol(absorbedMl, units) : '—'} label="absorbed" />
           </div>
+          {wettings.length > 0 && (
+            <div className="sub" style={{ marginTop: 10 }}>
+              {emptyingsPerDay.toFixed(1)} bladder emptyings / day counting wettings — vs{' '}
+              {trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} from toilet voids alone.
+            </div>
+          )}
         </Card>
       )}
 

@@ -22,6 +22,7 @@ describe('selectScreen', () => {
   it('an onboarded user goes to the requested screen', () => {
     expect(selectScreen({ authReady: true, onboarded: true, screen: 'chart' })).toBe('chart');
     expect(selectScreen({ authReady: true, onboarded: true, screen: 'settings' })).toBe('settings');
+    expect(selectScreen({ authReady: true, onboarded: true, screen: 'wet' })).toBe('wet');
   });
 
   it('an onboarded user with an unknown/home screen lands on home', () => {

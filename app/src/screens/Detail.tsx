@@ -8,11 +8,17 @@ import {
 } from '@core';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
-import { voidsOf, leaksOf, nightsOf, changesOf, drinksOf, timeStr, dateStr, durationStr, dayKey } from '../insights';
+import { voidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, timeStr, dateStr, durationStr, dayKey } from '../insights';
 import { fmtVol } from '../units';
+import { Icon, type IconName } from '../icons';
 
-const Row = ({ left, right }: { left: string; right: string }) => (
+const Row = ({ left, right }: { left: React.ReactNode; right: string }) => (
   <div className="logline"><span>{left}</span><b>{right}</b></div>
+);
+
+/** An event glyph + time, so the diary log speaks the same icon language as the Home buttons. */
+const Stamp = ({ icon, at }: { icon: IconName; at: number }) => (
+  <><Icon name={icon} size={16} /> {timeStr(at)}</>
 );
 
 const ans = (a: Record<string, string>, keys: string[]) =>
@@ -25,9 +31,10 @@ export function Detail() {
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
   const changes = changesOf(entries);
+  const wettings = wettingsOf(entries);
   const drinks = drinksOf(entries);
   const productName = (pid: string | null) => products.find((p) => p.id === pid)?.name ?? 'product';
-  const vol = (ml: number | null) => (ml == null ? 'no volume' : fmtVol(ml, units));
+  const vol = (ml: number | null | undefined) => (ml == null ? 'no volume' : fmtVol(ml, units));
   const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
 
   const back = () => navigate('report');
@@ -38,7 +45,7 @@ export function Detail() {
     : detail === 'bph' ? 'Emptying detail'
     : detail === 'urgency' ? 'Urgency detail'
     : detail === 'leaks' ? 'Leaks'
-    : detail === 'changes' ? 'Protection changes'
+    : detail === 'changes' ? 'Protection'
     : detail === 'drinks' ? 'Fluid intake'
     : 'Detail';
 
@@ -49,15 +56,25 @@ export function Detail() {
     body = (
       <div className="list">
         {sorted.length === 0 && <p className="note">Nothing logged yet.</p>}
-        {sorted.map((e) =>
-          e.kind === 'void' ? (
-            <Row key={e.id} left={`🚽 ${timeStr(e.at)}`} right={`${vol(e.volumeMl)}${ans(e.answers, ['urgency', 'stream']) !== '—' ? ` · ${ans(e.answers, ['urgency', 'stream'])}` : ''}`} />
-          ) : e.kind === 'leak' ? (
-            <Row key={e.id} left={`💧 ${timeStr(e.at)}`} right={ans(e.answers, ['leakSeverity', 'leakTrigger'])} />
-          ) : (
-            <Row key={e.id} left={`🌙 ${dateStr(e.bedtime)}`} right={ans(e.answers, ['howWasNight', 'wetDry'])} />
-          ),
-        )}
+        {sorted.map((e) => {
+          // Every entry kind renders here — the diary log mixes them all. Missing a kind
+          // (e.g. treating a drink, which has no `answers`, as a night) throws and blanks
+          // the whole screen, so this switch stays exhaustive.
+          switch (e.kind) {
+            case 'void':
+              return <Row key={e.id} left={<Stamp icon="void" at={e.at} />} right={`${vol(e.volumeMl)}${ans(e.answers, ['urgency', 'stream']) !== '—' ? ` · ${ans(e.answers, ['urgency', 'stream'])}` : ''}`} />;
+            case 'leak':
+              return <Row key={e.id} left={<Stamp icon="leak" at={e.at} />} right={ans(e.answers, ['leakSeverity', 'leakTrigger'])} />;
+            case 'change':
+              return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} />;
+            case 'wetting':
+              return <Row key={e.id} left={<><Stamp icon="wet" at={e.at} />{e.productId ? <> · {productName(e.productId)}</> : null}</>} right={ans(e.answers, ['amount', 'wetAwareness'])} />;
+            case 'drink':
+              return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} />;
+            case 'night':
+              return <Row key={e.id} left={<><Icon name="morning" size={16} /> {dateStr(e.bedtime)}</>} right={ans(e.answers, ['howWasNight', 'wetDry'])} />;
+          }
+        })}
       </div>
     );
   } else if (detail === 'nights') {
@@ -148,6 +165,7 @@ export function Detail() {
             </div>
           </div>
         )}
+        <div className="note" style={{ marginTop: 4, marginBottom: 4 }}>Changes</div>
         <div className="list">
           {changes.length === 0 && <p className="note">No changes logged.</p>}
           {changes
@@ -161,6 +179,26 @@ export function Detail() {
               />
             ))}
         </div>
+
+        {wettings.length > 0 && (
+          <>
+            <div className="note" style={{ marginTop: 14, marginBottom: 4 }}>
+              Wettings between changes — counted in voiding frequency, not volume
+            </div>
+            <div className="list">
+              {wettings
+                .slice()
+                .sort((a, b) => b.at - a.at)
+                .map((w) => (
+                  <Row
+                    key={w.id}
+                    left={`${dateStr(w.at)} ${timeStr(w.at)}`}
+                    right={ans(w.answers, ['amount', 'wetAwareness'])}
+                  />
+                ))}
+            </div>
+          </>
+        )}
       </>
     );
   } else if (detail === 'drinks') {
