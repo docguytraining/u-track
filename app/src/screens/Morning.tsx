@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Topbar, OptionGroup, VolumeField } from '../ui';
-import { voidsOf, timeStr, awarenessReduced } from '../insights';
+import { toiletVoidsOf, timeStr, awarenessReduced } from '../insights';
 
 const BED: [string, number][] = [
   ['9pm', 21], ['10pm', 22], ['11pm', 23], ['12am', 0], ['1am', 1], ['2am', 2], ['3am', 3],
@@ -41,7 +41,8 @@ export function Morning() {
   const gatewayShown = gateway.filter((q) => q.id !== 'wetAwareness' || (wet && awarenessReduced(traits)));
 
   // Voids you already logged while in bed — reconcile against these instead of asking blind.
-  const overnight = voidsOf(entries).filter((v) => v.at > bedTs && v.at < riseTs).sort((a, b) => a.at - b.at);
+  // Bathroom trips only — a product wetting or a leak overnight isn't "getting up to pee".
+  const overnight = toiletVoidsOf(entries).filter((v) => v.at > bedTs && v.at < riseTs).sort((a, b) => a.at - b.at);
   const loggedCount = overnight.length;
 
   const wokeAnswer = ['Woke to pee', 'Woke several times', 'Woke wet'].includes(answers.howWasNight ?? '');

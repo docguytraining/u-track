@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, sometimesMissesToilet, awarenessReduced, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
-import type { VoidEntry, LeakEntry, NightEntry, WettingEntry, DrinkEntry } from './store';
+import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
+import type { VoidEntry, NightEntry, DrinkEntry } from './store';
 
 const H = 3_600_000;
 const DAY = 86_400_000;
 const noon = Date.UTC(2026, 7, 5, 12); // Aug 5 2026, noon UTC — safe from midnight TZ flips
 
 const v = (at: number, answers: Record<string, string> = {}): VoidEntry =>
-  ({ kind: 'void', id: `v${at}`, at, volumeMl: null, answers });
-const leak = (answers: Record<string, string>): LeakEntry =>
-  ({ kind: 'leak', id: `l${Math.random()}`, at: noon, answers });
+  ({ kind: 'void', id: `v${at}`, at, where: 'toilet', leaked: false, volumeMl: null, size: null, productId: null, answers });
+const leak = (answers: Record<string, string>): VoidEntry =>
+  ({ kind: 'void', id: `l${Math.random()}`, at: noon, where: null, leaked: true, volumeMl: null, size: null, productId: null, answers });
 const drink = (at: number): DrinkEntry => ({ kind: 'drink', id: `d${at}`, at, type: 'Water', volumeMl: 250 });
-const wetting = (at: number, answers: Record<string, string> = {}): WettingEntry =>
-  ({ kind: 'wetting', id: `w${at}`, at, productId: null, answers });
+const wetting = (at: number, answers: Record<string, string> = {}): VoidEntry =>
+  ({ kind: 'void', id: `w${at}`, at, where: 'product', leaked: false, volumeMl: null, size: null, productId: null, answers });
 const night = (rising: number, answers: Record<string, string> = {}): NightEntry =>
   ({ kind: 'night', id: `n${rising}`, nightId: '', bedtime: rising - 8 * H, rising, firstVoidVolumeMl: null, answers });
 
@@ -45,11 +45,17 @@ describe('groupByDay', () => {
   });
 });
 
-describe('wettingsOf', () => {
-  it('selects only wetting entries', () => {
+describe('wettingsOf / leaksOf (attribute-based)', () => {
+  it('wettingsOf selects voids that went into a product', () => {
     const entries = [v(noon), wetting(noon + H), drink(noon), wetting(noon + 2 * H)];
     expect(wettingsOf(entries)).toHaveLength(2);
-    expect(wettingsOf(entries).every((w) => w.kind === 'wetting')).toBe(true);
+    expect(wettingsOf(entries).every((w) => w.where === 'product' || w.where === 'both')).toBe(true);
+  });
+
+  it('leaksOf selects voids that escaped, not clean toilet voids', () => {
+    const entries = [v(noon), leak({ leakSeverity: 'Damp' }), wetting(noon + H)];
+    expect(leaksOf(entries)).toHaveLength(1);
+    expect(leaksOf(entries)[0]!.leaked).toBe(true);
   });
 });
 

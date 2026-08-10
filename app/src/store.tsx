@@ -32,17 +32,27 @@ export interface AppUser {
 
 export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
 
+/**
+ * A void — one bladder emptying, the umbrella for everything. Two orthogonal facts
+ * describe what happened to it:
+ *  - `where`  — where it ended up: toilet / product / both, or null for a pure escape
+ *               (the "Leak" fast-log: it reached no toilet and no logged product).
+ *  - `leaked` — did any escape onto clothing/skin/bed. Independent of `where`: you can
+ *               leak on the way to the toilet, through a product, or with nothing on.
+ * Size can be a measured volume (`volumeMl`, jug or weighed — feeds the capacity/NPi math)
+ * or, when you can't measure (e.g. into a product), a perceived `size` that is descriptive
+ * only and never summed into the volume math.
+ */
+export type VoidWhere = 'toilet' | 'product' | 'both' | null;
 export interface VoidEntry {
   kind: 'void';
   id: string;
   at: number;
+  where: VoidWhere;
+  leaked: boolean;
   volumeMl: number | null;
-  answers: Record<string, string>;
-}
-export interface LeakEntry {
-  kind: 'leak';
-  id: string;
-  at: number;
+  size: string | null;
+  productId: string | null;
   answers: Record<string, string>;
 }
 export interface NightEntry {
@@ -64,18 +74,6 @@ export interface ChangeEntry {
   volumeMl: number | null;
   answers: Record<string, string>;
 }
-/** A wetting: urine released into protection that did NOT merit a change — the product
- * stayed on. Because it stayed on there is no weighed volume, so a wetting feeds voiding
- * *frequency* (and incontinence-episode frequency), not volume — the eventual change's
- * weight still captures the fluid, so counting a volume here too would double-count it.
- * Like a change it is not a bathroom trip, so it never counts toward nocturia. */
-export interface WettingEntry {
-  kind: 'wetting';
-  id: string;
-  at: number;
-  productId: string | null;
-  answers: Record<string, string>;
-}
 /** A drink — fluid intake, the input side of the frequency-volume chart. */
 export interface DrinkEntry {
   kind: 'drink';
@@ -84,7 +82,39 @@ export interface DrinkEntry {
   type: string;
   volumeMl: number | null;
 }
-export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry | WettingEntry | DrinkEntry;
+export type LogEntry = VoidEntry | NightEntry | ChangeEntry | DrinkEntry;
+
+/**
+ * Bring persisted entries up to the current shape. Older data used separate `leak` and
+ * `wetting` event kinds and voids without `where`/`leaked`; all of them normalize into the
+ * unified void so a returning user's history survives the model change.
+ */
+export function normalizeEntries(raw: readonly unknown[]): LogEntry[] {
+  const out: LogEntry[] = [];
+  for (const item of raw ?? []) {
+    const e = item as Record<string, unknown>;
+    const at = e.at as number;
+    const answers = (e.answers as Record<string, string>) ?? {};
+    if (e.kind === 'wetting') {
+      out.push({ kind: 'void', id: e.id as string, at, where: 'product', leaked: false, volumeMl: null, size: null, productId: (e.productId as string | null) ?? null, answers });
+    } else if (e.kind === 'leak') {
+      out.push({ kind: 'void', id: e.id as string, at, where: null, leaked: true, volumeMl: null, size: null, productId: null, answers });
+    } else if (e.kind === 'void') {
+      out.push({
+        kind: 'void', id: e.id as string, at,
+        where: (e.where as VoidWhere) ?? 'toilet',
+        leaked: (e.leaked as boolean) ?? false,
+        volumeMl: (e.volumeMl as number | null) ?? null,
+        size: (e.size as string | null) ?? null,
+        productId: (e.productId as string | null) ?? null,
+        answers,
+      });
+    } else {
+      out.push(item as LogEntry);
+    }
+  }
+  return out;
+}
 
 /** A protection product in the user's library — a trait, set rarely (spec §6.5). */
 export interface Product {
@@ -121,10 +151,9 @@ interface Store extends State {
   signIn: () => void;
   signOut: () => void;
   completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
-  logVoid: (v: { volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
+  logVoid: (v: { where?: VoidWhere; leaked?: boolean; volumeMl?: number | null; size?: string | null; productId?: string | null; answers: Record<string, string>; at?: number }) => void;
   logLeak: (answers: Record<string, string>, at?: number) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
-  logWetting: (w: { productId: string | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   removeDrinkType: (name: string) => void;
   addDrinkType: (name: string) => void;
@@ -208,7 +237,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setState((s) => {
         // Tested policy (core/sync/mergeOnSignIn): first sign-in migrates local data;
         // a returning account loads only its own cloud doc — never a prior session.
-        const merged = mergeOnSignIn(pickPersisted(initial), pickPersisted(s), (data as Partial<Persisted>) ?? null);
+        // Migrate a returning account's entries (old leak/wetting kinds → unified void).
+        const cloud = data ? ({ ...data, entries: normalizeEntries((data.entries as unknown[]) ?? []) } as Partial<Persisted>) : null;
+        const merged = mergeOnSignIn(pickPersisted(initial), pickPersisted(s), cloud);
         const next: State = { ...initial, ...merged, user: { uid: u.uid, name: u.displayName, email: u.email }, authReady: true };
         next.screen = next.onboarded ? 'home' : 'onboarding';
         return next;
@@ -231,7 +262,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const voids = state.entries.filter((e): e is VoidEntry => e.kind === 'void');
     const nights = state.entries.filter((e): e is NightEntry => e.kind === 'night');
     const changes = state.entries.filter((e): e is ChangeEntry => e.kind === 'change');
-    const coreVoids: VoidEvent[] = voids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
+    // Only voids that reached the toilet are bathroom trips — they alone feed capacity,
+    // nocturia and NUV. Product/leak voids count toward frequency but not these.
+    const toiletVoids = voids.filter((v) => v.where === 'toilet' || v.where === 'both');
+    const coreVoids: VoidEvent[] = toiletVoids.map((v) => ({ id: v.id, at: v.at, volumeMl: v.volumeMl }));
     // Changed products carry real urine volume but are not bathroom trips.
     const changeVoids: VoidEvent[] = changes.map((c) => ({ id: c.id, at: c.at, volumeMl: c.volumeMl }));
     const volumeEvents = [...coreVoids, ...changeVoids];
@@ -283,14 +317,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
           return { ...s, onboarded: true, enabledModules: modules, traits, products: [...s.products, ...created], screen: 'home' };
         }),
-      logVoid: ({ volumeMl, answers, at }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), volumeMl, answers }] })),
+      logVoid: ({ where = 'toilet', leaked = false, volumeMl = null, size = null, productId = null, answers, at }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where, leaked, volumeMl, size, productId, answers }] })),
+      // The Leak fast-log: a void that escaped, reaching no toilet and no logged product.
       logLeak: (answers, at) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: at ?? Date.now(), answers }] })),
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where: null, leaked: true, volumeMl: null, size: null, productId: null, answers }] })),
       logChange: ({ productId, volumeMl, answers, at }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
-      logWetting: ({ productId, answers, at }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'wetting', id: id(), at: at ?? Date.now(), productId, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
@@ -303,7 +336,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // a real void just after rising so NUV/NPi can pick it up (spec §4, §7.6).
           const firstVoid: LogEntry[] =
             n.firstVoidVolumeMl != null
-              ? [{ kind: 'void', id: id(), at: n.rising + 10 * 60_000, volumeMl: n.firstVoidVolumeMl, answers: { firstMorning: 'yes' } }]
+              ? [{ kind: 'void', id: id(), at: n.rising + 10 * 60_000, where: 'toilet', leaked: false, volumeMl: n.firstVoidVolumeMl, size: null, productId: null, answers: { firstMorning: 'yes' } }]
               : [];
           return { ...s, entries: [...s.entries, night, ...firstVoid] };
         }),
@@ -336,11 +369,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             const nNoct = i % 3 === 1 ? 2 : 1;
             const vol = (b: number) => (measured ? b : null);
 
-            out.push({ kind: 'void', id: id(), at: bedtime - 20 * MIN, volumeMl: vol(300), answers: {} }); // pre-sleep
-            for (let k = 0; k < nNoct; k++) out.push({ kind: 'void', id: id(), at: bedtime + (2 + k * 2.5) * H, volumeMl: vol(210 - k * 20), answers: {} });
+            // A void that reached the toilet — the bathroom trips that carry volume.
+            const tvoid = (at: number, volumeMl: number | null, answers: Record<string, string> = {}): LogEntry =>
+              ({ kind: 'void', id: id(), at, where: 'toilet', leaked: false, volumeMl, size: null, productId: null, answers });
+
+            out.push(tvoid(bedtime - 20 * MIN, vol(300))); // pre-sleep
+            for (let k = 0; k < nNoct; k++) out.push(tvoid(bedtime + (2 + k * 2.5) * H, vol(210 - k * 20)));
             const fm = vol(280);
-            out.push({ kind: 'void', id: id(), at: rising + 10 * MIN, volumeMl: fm, answers: { firstMorning: 'yes' } });
-            for (const t of [9, 11, 13, 15, 18, 20]) out.push({ kind: 'void', id: id(), at: day0 + t * H + (i % 7) * MIN, volumeMl: vol(220 + (t % 3) * 30), answers: {} });
+            out.push(tvoid(rising + 10 * MIN, fm, { firstMorning: 'yes' }));
+            for (const t of [9, 11, 13, 15, 18, 20]) out.push(tvoid(day0 + t * H + (i % 7) * MIN, vol(220 + (t % 3) * 30)));
             let di = 0;
             for (const t of [7, 10, 12, 15, 18, 20]) { out.push({ kind: 'drink', id: id(), at: day0 + t * H, type: rota[(i + di) % rota.length] ?? 'Water', volumeMl: 355 }); di++; }
             // Mostly wet, occasionally dry — realistic for someone in overnight briefs.
@@ -349,13 +386,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             if (hasNight) out.push({ kind: 'night', id: id(), nightId: dayKey(bedtime), bedtime, rising, firstVoidVolumeMl: fm, answers: { howWasNight: nNoct > 1 ? 'Woke several times' : 'Woke to pee', wetDry, nightVoids: String(nNoct) } });
             // On wet nights, a weighed overnight change — urine into the brief, not the toilet.
             if (isWet) out.push({ kind: 'change', id: id(), at: rising + 5 * MIN, productId: null, volumeMl: 260 + (i % 4) * 60, answers: { fullness: wetDry === 'Soaked' ? 'Saturated' : 'Heavy' } });
-            // Daytime wettings into the product that didn't merit a change — these feed
-            // voiding frequency, not volume (the next change's weight already has the fluid).
+            // Daytime voids into the product (no change) — these feed voiding frequency, not
+            // volume; the perceived size is descriptive only.
             if (isWet) {
-              out.push({ kind: 'wetting', id: id(), at: day0 + 10 * H + (i % 5) * MIN, productId: null, answers: { destination: 'Product', leakSeverity: 'Damp', leakTrigger: 'Unsure' } });
-              if (i % 2 === 0) out.push({ kind: 'wetting', id: id(), at: day0 + 16 * H, productId: null, answers: { destination: 'Both', leakSeverity: 'Moderate', leakTrigger: 'Urge' } });
+              out.push({ kind: 'void', id: id(), at: day0 + 10 * H + (i % 5) * MIN, where: 'product', leaked: false, volumeMl: null, size: 'Small', productId: null, answers: { leakSeverity: 'Damp', leakTrigger: 'Unsure' } });
+              if (i % 2 === 0) out.push({ kind: 'void', id: id(), at: day0 + 16 * H, where: 'product', leaked: false, volumeMl: null, size: 'Medium', productId: null, answers: { leakSeverity: 'Moderate', leakTrigger: 'Urge' } });
             }
-            if (i % 4 === 0) out.push({ kind: 'leak', id: id(), at: day0 + 14 * H, answers: { leakSeverity: 'Damp', leakTrigger: i % 8 === 0 ? 'Cough / lift' : 'Urge' } });
+            // An occasional escape (leak) — reached no toilet, no containment.
+            if (i % 4 === 0) out.push({ kind: 'void', id: id(), at: day0 + 14 * H, where: null, leaked: true, volumeMl: null, size: null, productId: null, answers: { leakSeverity: 'Damp', leakTrigger: i % 8 === 0 ? 'Cough / lift' : 'Urge' } });
           }
           return { ...s, entries: [...s.entries, ...out], measuredDay: true };
         }),
