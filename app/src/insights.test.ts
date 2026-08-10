@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
-import type { VoidEntry, LeakEntry, NightEntry, DrinkEntry } from './store';
+import { groupByDay, wettingsOf, sometimesMissesToilet, awarenessReduced, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
+import type { VoidEntry, LeakEntry, NightEntry, WettingEntry, DrinkEntry } from './store';
 
 const H = 3_600_000;
 const DAY = 86_400_000;
@@ -11,6 +11,8 @@ const v = (at: number, answers: Record<string, string> = {}): VoidEntry =>
 const leak = (answers: Record<string, string>): LeakEntry =>
   ({ kind: 'leak', id: `l${Math.random()}`, at: noon, answers });
 const drink = (at: number): DrinkEntry => ({ kind: 'drink', id: `d${at}`, at, type: 'Water', volumeMl: 250 });
+const wetting = (at: number, answers: Record<string, string> = {}): WettingEntry =>
+  ({ kind: 'wetting', id: `w${at}`, at, productId: null, answers });
 const night = (rising: number, answers: Record<string, string> = {}): NightEntry =>
   ({ kind: 'night', id: `n${rising}`, nightId: '', bedtime: rising - 8 * H, rising, firstVoidVolumeMl: null, answers });
 
@@ -35,6 +37,20 @@ describe('groupByDay', () => {
   it('returns nothing for no entries', () => {
     expect(groupByDay([])).toEqual([]);
   });
+
+  it('collects wettings into the day they occurred', () => {
+    const [day] = groupByDay([v(noon), wetting(noon + H), wetting(noon + 2 * H)]);
+    expect(day!.wettings).toHaveLength(2);
+    expect(day!.voids).toHaveLength(1);
+  });
+});
+
+describe('wettingsOf', () => {
+  it('selects only wetting entries', () => {
+    const entries = [v(noon), wetting(noon + H), drink(noon), wetting(noon + 2 * H)];
+    expect(wettingsOf(entries)).toHaveLength(2);
+    expect(wettingsOf(entries).every((w) => w.kind === 'wetting')).toBe(true);
+  });
 });
 
 describe('wet/dry night detection', () => {
@@ -49,6 +65,42 @@ describe('wet/dry night detection', () => {
 
   it('a "woke wet" report counts as wet even without a wetDry answer', () => {
     expect(isWetNight(night(noon, { howWasNight: 'Woke wet' }))).toBe(true);
+  });
+});
+
+describe('sometimesMissesToilet (the void-fork gate)', () => {
+  it('is off without protection, whatever else is true', () => {
+    expect(sometimesMissesToilet(['urgency', 'leakage'], {})).toBe(false);
+    expect(sometimesMissesToilet([], { warningTime: 'Almost none' })).toBe(false);
+  });
+
+  it('is on when a protection user has urgency, leakage, or awareness tracking', () => {
+    expect(sometimesMissesToilet(['protection', 'urgency'], {})).toBe(true);
+    expect(sometimesMissesToilet(['protection', 'leakage'], {})).toBe(true);
+    expect(sometimesMissesToilet(['protection', 'awareness'], {})).toBe(true);
+  });
+
+  it('is on when a protection user has low warning or reduced filling awareness', () => {
+    expect(sometimesMissesToilet(['protection'], { warningTime: '<5 min' })).toBe(true);
+    expect(sometimesMissesToilet(['protection'], { fillingAwareness: 'Absent' })).toBe(true);
+  });
+
+  it('is off for a protection user with no relevant symptom or trait', () => {
+    expect(sometimesMissesToilet(['protection', 'nocturia'], { warningTime: '15+ min' })).toBe(false);
+  });
+});
+
+describe('awarenessReduced (the awareness-question gate)', () => {
+  it('is false for normal sensation / no relevant traits', () => {
+    expect(awarenessReduced({})).toBe(false);
+    expect(awarenessReduced({ fillingAwareness: 'Normal', warningTime: '15+ min' })).toBe(false);
+  });
+
+  it('is true when filling awareness, warning time, or leak noticing is reduced', () => {
+    expect(awarenessReduced({ fillingAwareness: 'Absent' })).toBe(true);
+    expect(awarenessReduced({ fillingAwareness: 'Delayed' })).toBe(true);
+    expect(awarenessReduced({ warningTime: 'Almost none' })).toBe(true);
+    expect(awarenessReduced({ leakNoticing: 'Usually find out after' })).toBe(true);
   });
 });
 

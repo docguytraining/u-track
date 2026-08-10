@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { awarenessReduced } from '../insights';
 import { Topbar, OptionGroup, WhenField } from '../ui';
 
 export function LogLeak() {
-  const { coreQuestions, gatewayQuestions, logLeak, navigate } = useStore();
+  const { coreQuestions, gatewayQuestions, logLeak, navigate, traits } = useStore();
   const core = coreQuestions('leak');
-  const gateway = gatewayQuestions('leak');
+  // The awareness question only earns its place for reduced-sensation profiles.
+  const gateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [at, setAt] = useState<number | null>(null);
   const [showMore, setShowMore] = useState(false);

@@ -3,9 +3,10 @@ import { weighedVolumeMl } from '@core';
 import { useStore } from '../store';
 import { Topbar, OptionGroup, WhenField } from '../ui';
 import { fmtVol } from '../units';
+import { changesOf, wettingsOf, timeStr } from '../insights';
 
 export function LogChange() {
-  const { products, units, logChange, navigate } = useStore();
+  const { products, units, logChange, navigate, entries } = useStore();
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [wet, setWet] = useState('');
   const [fullness, setFullness] = useState('');
@@ -14,6 +15,12 @@ export function LogChange() {
   const product = products.find((p) => p.id === productId);
   const wetNum = Number(wet);
   const volumeMl = product && wet !== '' && !Number.isNaN(wetNum) ? weighedVolumeMl(product.dryGrams, wetNum) : null;
+
+  // Wettings logged since the last change are already soaked into this product, so the
+  // wet weight below covers them. They stay volume-less on their own (counted for
+  // frequency) precisely so this weight isn't double-counted.
+  const lastChangeAt = changesOf(entries).reduce((m, c) => Math.max(m, c.at), 0);
+  const wettingsSince = wettingsOf(entries).filter((w) => w.at > lastChangeAt);
 
   const done = () => {
     logChange({ productId: productId || null, volumeMl, answers: fullness ? { fullness } : {}, at: at ?? undefined });
@@ -24,6 +31,15 @@ export function LogChange() {
     <div className="screen">
       <Topbar title="Change logged ✓" onBack={() => navigate('home')} />
       <p className="lead">Logged. Weigh it for a real volume, or just note how full — either helps the picture.</p>
+
+      {wettingsSince.length > 0 && (
+        <p className="note">
+          {wettingsSince.length} wetting{wettingsSince.length > 1 ? 's' : ''} since your last change
+          ({wettingsSince.map((w) => timeStr(w.at)).join(', ')}). The wet weight already includes
+          {wettingsSince.length > 1 ? ' them' : ' it'} — they’re counted toward how often you go, not
+          added to volume again, so nothing is double-counted.
+        </p>
+      )}
 
       {products.length === 0 ? (
         <p className="note">Add a product in Settings first, so a change can be weighed.</p>

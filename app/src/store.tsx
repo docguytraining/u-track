@@ -64,6 +64,18 @@ export interface ChangeEntry {
   volumeMl: number | null;
   answers: Record<string, string>;
 }
+/** A wetting: urine released into protection that did NOT merit a change — the product
+ * stayed on. Because it stayed on there is no weighed volume, so a wetting feeds voiding
+ * *frequency* (and incontinence-episode frequency), not volume — the eventual change's
+ * weight still captures the fluid, so counting a volume here too would double-count it.
+ * Like a change it is not a bathroom trip, so it never counts toward nocturia. */
+export interface WettingEntry {
+  kind: 'wetting';
+  id: string;
+  at: number;
+  productId: string | null;
+  answers: Record<string, string>;
+}
 /** A drink — fluid intake, the input side of the frequency-volume chart. */
 export interface DrinkEntry {
   kind: 'drink';
@@ -72,7 +84,7 @@ export interface DrinkEntry {
   type: string;
   volumeMl: number | null;
 }
-export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry | DrinkEntry;
+export type LogEntry = VoidEntry | LeakEntry | NightEntry | ChangeEntry | WettingEntry | DrinkEntry;
 
 /** A protection product in the user's library — a trait, set rarely (spec §6.5). */
 export interface Product {
@@ -112,6 +124,7 @@ interface Store extends State {
   logVoid: (v: { volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
   logLeak: (answers: Record<string, string>, at?: number) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
+  logWetting: (w: { productId: string | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   removeDrinkType: (name: string) => void;
   addDrinkType: (name: string) => void;
@@ -276,6 +289,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'leak', id: id(), at: at ?? Date.now(), answers }] })),
       logChange: ({ productId, volumeMl, answers, at }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
+      logWetting: ({ productId, answers, at }) =>
+        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'wetting', id: id(), at: at ?? Date.now(), productId, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
@@ -334,6 +349,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             if (hasNight) out.push({ kind: 'night', id: id(), nightId: dayKey(bedtime), bedtime, rising, firstVoidVolumeMl: fm, answers: { howWasNight: nNoct > 1 ? 'Woke several times' : 'Woke to pee', wetDry, nightVoids: String(nNoct) } });
             // On wet nights, a weighed overnight change — urine into the brief, not the toilet.
             if (isWet) out.push({ kind: 'change', id: id(), at: rising + 5 * MIN, productId: null, volumeMl: 260 + (i % 4) * 60, answers: { fullness: wetDry === 'Soaked' ? 'Saturated' : 'Heavy' } });
+            // Daytime wettings into the product that didn't merit a change — these feed
+            // voiding frequency, not volume (the next change's weight already has the fluid).
+            if (isWet) {
+              out.push({ kind: 'wetting', id: id(), at: day0 + 10 * H + (i % 5) * MIN, productId: null, answers: { destination: 'Product', leakSeverity: 'Damp', leakTrigger: 'Unsure' } });
+              if (i % 2 === 0) out.push({ kind: 'wetting', id: id(), at: day0 + 16 * H, productId: null, answers: { destination: 'Both', leakSeverity: 'Moderate', leakTrigger: 'Urge' } });
+            }
             if (i % 4 === 0) out.push({ kind: 'leak', id: id(), at: day0 + 14 * H, answers: { leakSeverity: 'Damp', leakTrigger: i % 8 === 0 ? 'Cough / lift' : 'Urge' } });
           }
           return { ...s, entries: [...s.entries, ...out], measuredDay: true };

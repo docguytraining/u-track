@@ -1,4 +1,5 @@
 import { useStore } from '../store';
+import { Icon } from '../icons';
 
 export function Home() {
   const { measuredDay, setMeasuredDay, navigate, enabledModules } = useStore();
@@ -15,13 +16,13 @@ export function Home() {
       </div>
 
       {/* Fast path: the things you tap to log, front and center. Nothing to read. */}
-      <button className="big center block" onClick={() => navigate('void')}>🚽&nbsp; Void</button>
-      <button className="big center block" onClick={() => navigate('drink')}>🥤&nbsp; Drink</button>
-      <button className="big center block" onClick={() => navigate('leak')}>💧&nbsp; Leak</button>
+      <button className="big center block" onClick={() => navigate('void')}><Icon name="void" /> Void</button>
+      <button className="big center block" onClick={() => navigate('drink')}><Icon name="drink" /> Drink</button>
+      <button className="big center block" onClick={() => navigate('leak')}><Icon name="leak" /> Leak</button>
       {enabledModules.includes('protection') && (
-        <button className="big center block" onClick={() => navigate('change')}>🩲&nbsp; Change</button>
+        <button className="big center block" onClick={() => navigate('change')}><Icon name="change" /> Change</button>
       )}
-      <button className="big center block" onClick={() => navigate('morning')}>🌙&nbsp; Morning check-in</button>
+      <button className="big center block" onClick={() => navigate('morning')}><Icon name="morning" /> Morning check-in</button>
 
       <div className="spacer-v" />
 

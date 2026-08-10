@@ -1,11 +1,44 @@
 import type { SleepPeriod } from '@core';
-import type { LogEntry, VoidEntry, LeakEntry, NightEntry, ChangeEntry, DrinkEntry } from './store';
+import type { LogEntry, VoidEntry, LeakEntry, NightEntry, ChangeEntry, WettingEntry, DrinkEntry } from './store';
 
 export const voidsOf = (e: readonly LogEntry[]) => e.filter((x): x is VoidEntry => x.kind === 'void');
 export const leaksOf = (e: readonly LogEntry[]) => e.filter((x): x is LeakEntry => x.kind === 'leak');
 export const nightsOf = (e: readonly LogEntry[]) => e.filter((x): x is NightEntry => x.kind === 'night');
 export const changesOf = (e: readonly LogEntry[]) => e.filter((x): x is ChangeEntry => x.kind === 'change');
+export const wettingsOf = (e: readonly LogEntry[]) => e.filter((x): x is WettingEntry => x.kind === 'wetting');
 export const drinksOf = (e: readonly LogEntry[]) => e.filter((x): x is DrinkEntry => x.kind === 'drink');
+
+/**
+ * Profile signal that a void sometimes doesn't reach the toilet in time — urge,
+ * functional, or reduced-awareness incontinence. Only meaningful for someone who wears
+ * protection (otherwise a miss is a leak/accident, not a wetting into a product), so it
+ * gates on that. When true, the void flow asks "did you make it?" and forks its questions.
+ */
+export function sometimesMissesToilet(
+  enabledModules: readonly string[],
+  traits: Record<string, string>,
+): boolean {
+  const has = (m: string) => enabledModules.includes(m);
+  if (!has('protection')) return false;
+  const lowWarning =
+    ['<5 min', 'Almost none'].includes(traits.warningTime ?? '') ||
+    ['Delayed', 'Minimal', 'Absent'].includes(traits.fillingAwareness ?? '');
+  return has('urgency') || has('leakage') || has('awareness') || lowWarning;
+}
+
+/**
+ * Whether the profile says bladder sensation is reduced — the only population for whom the
+ * per-episode "did you feel it?" question is worth asking. For someone with normal
+ * sensation the answer is always "yes, obviously," so we hide it; for an insensate person
+ * the run of "found out after" is the clinical fingerprint, so we keep it.
+ */
+export function awarenessReduced(traits: Record<string, string>): boolean {
+  return (
+    ['Delayed', 'Minimal', 'Absent'].includes(traits.fillingAwareness ?? '') ||
+    ['<5 min', 'Almost none'].includes(traits.warningTime ?? '') ||
+    ['Sometimes', 'Usually find out after', 'Wake and find it'].includes(traits.leakNoticing ?? '')
+  );
+}
 
 /** A night reads as wet from the wetting answer or a "woke wet" report. */
 export const isWetNight = (n: NightEntry) =>
@@ -50,6 +83,7 @@ export interface DayGroup {
   voids: VoidEntry[];
   drinks: DrinkEntry[];
   changes: ChangeEntry[];
+  wettings: WettingEntry[];
   night?: NightEntry;
 }
 
@@ -57,11 +91,12 @@ export interface DayGroup {
 export function groupByDay(entries: readonly LogEntry[]): DayGroup[] {
   const byDay = new Map<string, DayGroup>();
   const get = (day: string): DayGroup =>
-    byDay.get(day) ?? byDay.set(day, { day, voids: [], drinks: [], changes: [] }).get(day)!;
+    byDay.get(day) ?? byDay.set(day, { day, voids: [], drinks: [], changes: [], wettings: [] }).get(day)!;
   for (const e of entries) {
     if (e.kind === 'void') get(dayKeyOf(e.at)).voids.push(e);
     else if (e.kind === 'drink') get(dayKeyOf(e.at)).drinks.push(e);
     else if (e.kind === 'change') get(dayKeyOf(e.at)).changes.push(e);
+    else if (e.kind === 'wetting') get(dayKeyOf(e.at)).wettings.push(e);
     else if (e.kind === 'night') get(dayKeyOf(e.rising)).night = e;
   }
   return [...byDay.values()].sort((a, b) => (a.day < b.day ? 1 : -1));
