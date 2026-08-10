@@ -80,7 +80,8 @@ export const MODULES: Record<string, ModuleDef> = {
     widget: 'Wet nights',
     questions: [
       q('wetDry', 'morning', true, 85, 'Wet or dry this morning?', ['Dry', 'Damp', 'Wet', 'Soaked']),
-      q('wetAwareness', 'morning', false, 50, 'Did you notice before waking?', ['Woke before', 'Slept through', 'Found out after', 'Unsure']),
+      // Only meaningful on a wet night — the Morning screen hides it when the morning was dry.
+      q('wetAwareness', 'morning', false, 50, 'When did you realize you were wet?', ['It woke me', 'Found out this morning', 'Not sure']),
     ],
   },
   protection: {

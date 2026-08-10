@@ -20,19 +20,26 @@ const bedtimeFor = (h: number) => {
 };
 
 export function Morning() {
-  const { coreQuestions, gatewayQuestions, logNight, navigate, products, entries } = useStore();
-  // Morning is always the full flow (spec §7.5) — all enabled morning questions.
-  const questions = [...coreQuestions('morning'), ...gatewayQuestions('morning')];
+  const { coreQuestions, gatewayQuestions, logNight, logChange, navigate, products, entries } = useStore();
+  // Only the instrument-tied questions are on the fast path; the rest wait behind
+  // "Track anything else?" — the more we ask up front, the less gets answered.
+  const core = coreQuestions('morning');
+  const gateway = gatewayQuestions('morning');
 
   const [bedHour, setBedHour] = useState(23);
   const [riseHour, setRiseHour] = useState(7);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [firstVoidMl, setFirstVoidMl] = useState<number | null>(null);
+  const [showMore, setShowMore] = useState(false);
 
   const bedTs = bedtimeFor(bedHour);
   const riseTs = risingFor(riseHour);
-  // Voids you already logged while in bed — the app reconciles against these
-  // instead of asking blind (nocturnal window = between bedtime and rising).
+  // Did the night end wet? Then the overnight output is in the product, not the toilet.
+  const wet = ['Damp', 'Wet', 'Soaked'].includes(answers.wetDry ?? '') || answers.howWasNight === 'Woke wet';
+  // Awareness only makes sense on a wet night — no point asking a dry morning about it.
+  const gatewayShown = gateway.filter((q) => q.id !== 'wetAwareness' || wet);
+
+  // Voids you already logged while in bed — reconcile against these instead of asking blind.
   const overnight = voidsOf(entries).filter((v) => v.at > bedTs && v.at < riseTs).sort((a, b) => a.at - b.at);
   const loggedCount = overnight.length;
 
@@ -40,8 +47,16 @@ export function Morning() {
   const showTrips = loggedCount > 0 || wokeAnswer;
   const total = answers.nightVoids ?? String(loggedCount);
 
+  const set = (q: string, v: string) => setAnswers((a) => ({ ...a, [q]: v }));
   const save = () => {
-    logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: firstVoidMl, answers: { nightVoids: total, ...answers } });
+    if (wet) {
+      // Overnight urine went into the product → record it as a change near rising, where
+      // it counts toward NUV via the weighed-volume path — NOT as a phantom toilet void.
+      if (firstVoidMl != null) logChange({ productId: products[0]?.id ?? null, volumeMl: firstVoidMl, answers: {}, at: riseTs + 5 * 60_000 });
+      logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: null, answers: { nightVoids: total, ...answers } });
+    } else {
+      logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: firstVoidMl, answers: { nightVoids: total, ...answers } });
+    }
     navigate('home');
   };
 
@@ -65,10 +80,11 @@ export function Morning() {
             <button key={h} className={riseHour === h ? 'selected' : ''} onClick={() => setRiseHour(h)}>{l}</button>
           ))}
         </div>
+        <p className="note" style={{ marginTop: 2 }}>Sets the overnight window — which trips count as nighttime.</p>
       </div>
 
-      {questions.map((q) => (
-        <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} />
+      {core.map((q) => (
+        <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
       ))}
 
       {/* Nocturia frequency — reconciled against what you logged overnight. */}
@@ -80,7 +96,7 @@ export function Morning() {
               <p className="note" style={{ marginTop: -2 }}>You logged {loggedCount} while in bed. Did you miss any?</p>
               <div className="list">
                 {overnight.map((v) => (
-                  <div className="logline" key={v.id}><span>🚽 {timeStr(v.at)}</span><b>{v.volumeMl == null ? 'no volume' : `${v.volumeMl} ml`}</b></div>
+                  <div className="logline" key={v.id}><span>{timeStr(v.at)}</span><b>{v.volumeMl == null ? 'no volume' : `${v.volumeMl} ml`}</b></div>
                 ))}
               </div>
             </>
@@ -91,7 +107,7 @@ export function Morning() {
             {[0, 1, 2, 3, 4, 5].map((n) => {
               const label = n === 5 ? '5+' : String(n);
               return (
-                <button key={label} className={total === label ? 'selected' : ''} onClick={() => setAnswers((a) => ({ ...a, nightVoids: label }))}>
+                <button key={label} className={total === label ? 'selected' : ''} onClick={() => set('nightVoids', label)}>
                   {label}
                 </button>
               );
@@ -104,11 +120,31 @@ export function Morning() {
       )}
 
       <div className="hr" />
+      {/* The first-morning volume — a toilet void on a dry night, the weighed product on a wet one. */}
       <div className="field">
-        <label>First morning void</label>
-        <p className="note" style={{ marginTop: -2 }}>The single most useful number in the whole chart.</p>
+        {wet ? (
+          <>
+            <label>How wet was your protection?</label>
+            <p className="note" style={{ marginTop: -2 }}>Weigh it for the overnight volume — the number that powers the night report.</p>
+          </>
+        ) : (
+          <>
+            <label>First morning void</label>
+            <p className="note" style={{ marginTop: -2 }}>The single most useful number in the whole chart.</p>
+          </>
+        )}
         <VolumeField valueMl={firstVoidMl} onChange={setFirstVoidMl} products={products} />
       </div>
+
+      {gatewayShown.length > 0 && !showMore && (
+        <button className="ghost block center" onClick={() => setShowMore(true)}>
+          Track anything else? ({gatewayShown.length})
+        </button>
+      )}
+      {showMore &&
+        gatewayShown.map((q) => (
+          <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
+        ))}
 
       <div className="spacer-v" />
       <button className="primary block center" onClick={save}>Save the night</button>
