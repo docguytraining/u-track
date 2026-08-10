@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { sometimesMissesToilet } from '../insights';
+import { sometimesMissesToilet, awarenessReduced } from '../insights';
 import { Topbar, OptionGroup, VolumeField, WhenField } from '../ui';
 
 /**
@@ -23,7 +23,8 @@ export function LogVoid() {
   const gateway = gatewayQuestions('void');
   // A wetting is a leak-family event — its instrument-tied questions come from that surface.
   const leakCore = coreQuestions('leak');
-  const leakGateway = gatewayQuestions('leak');
+  // The awareness question only earns its place for reduced-sensation profiles.
+  const leakGateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
   const [at, setAt] = useState<number | null>(null);

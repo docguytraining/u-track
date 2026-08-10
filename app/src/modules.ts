@@ -80,8 +80,9 @@ export const MODULES: Record<string, ModuleDef> = {
     widget: 'Wet nights',
     questions: [
       q('wetDry', 'morning', true, 85, 'Wet or dry this morning?', ['Dry', 'Damp', 'Wet', 'Soaked']),
-      // Only meaningful on a wet night — the Morning screen hides it when the morning was dry.
-      q('wetAwareness', 'morning', false, 50, 'When did you realize you were wet?', ['It woke me', 'Found out this morning', 'Not sure']),
+      // Sensation, not arousal or blame: only shown on a wet night AND only when the
+      // profile says awareness is reduced (see awarenessReduced) — the insensate signal.
+      q('wetAwareness', 'morning', false, 50, 'Any warning before it happened?', ['Felt it coming', 'No warning — found out after', 'Not sure']),
     ],
   },
   protection: {

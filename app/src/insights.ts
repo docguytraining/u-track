@@ -26,6 +26,20 @@ export function sometimesMissesToilet(
   return has('urgency') || has('leakage') || has('awareness') || lowWarning;
 }
 
+/**
+ * Whether the profile says bladder sensation is reduced — the only population for whom the
+ * per-episode "did you feel it?" question is worth asking. For someone with normal
+ * sensation the answer is always "yes, obviously," so we hide it; for an insensate person
+ * the run of "found out after" is the clinical fingerprint, so we keep it.
+ */
+export function awarenessReduced(traits: Record<string, string>): boolean {
+  return (
+    ['Delayed', 'Minimal', 'Absent'].includes(traits.fillingAwareness ?? '') ||
+    ['<5 min', 'Almost none'].includes(traits.warningTime ?? '') ||
+    ['Sometimes', 'Usually find out after', 'Wake and find it'].includes(traits.leakNoticing ?? '')
+  );
+}
+
 /** A night reads as wet from the wetting answer or a "woke wet" report. */
 export const isWetNight = (n: NightEntry) =>
   ['Damp', 'Wet', 'Soaked'].includes(n.answers.wetDry ?? '') || n.answers.howWasNight === 'Woke wet';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Topbar, OptionGroup, VolumeField } from '../ui';
-import { voidsOf, timeStr } from '../insights';
+import { voidsOf, timeStr, awarenessReduced } from '../insights';
 
 const BED: [string, number][] = [
   ['9pm', 21], ['10pm', 22], ['11pm', 23], ['12am', 0], ['1am', 1], ['2am', 2], ['3am', 3],
@@ -20,7 +20,7 @@ const bedtimeFor = (h: number) => {
 };
 
 export function Morning() {
-  const { coreQuestions, gatewayQuestions, logNight, logChange, navigate, products, entries } = useStore();
+  const { coreQuestions, gatewayQuestions, logNight, logChange, navigate, products, entries, traits } = useStore();
   // Only the instrument-tied questions are on the fast path; the rest wait behind
   // "Track anything else?" — the more we ask up front, the less gets answered.
   const core = coreQuestions('morning');
@@ -36,8 +36,9 @@ export function Morning() {
   const riseTs = risingFor(riseHour);
   // Did the night end wet? Then the overnight output is in the product, not the toilet.
   const wet = ['Damp', 'Wet', 'Soaked'].includes(answers.wetDry ?? '') || answers.howWasNight === 'Woke wet';
-  // Awareness only makes sense on a wet night — no point asking a dry morning about it.
-  const gatewayShown = gateway.filter((q) => q.id !== 'wetAwareness' || wet);
+  // The awareness question is only worth asking on a wet night AND only for someone whose
+  // profile says sensation is reduced — for anyone else it's noise. Hidden otherwise.
+  const gatewayShown = gateway.filter((q) => q.id !== 'wetAwareness' || (wet && awarenessReduced(traits)));
 
   // Voids you already logged while in bed — reconcile against these instead of asking blind.
   const overnight = voidsOf(entries).filter((v) => v.at > bedTs && v.at < riseTs).sort((a, b) => a.at - b.at);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, sometimesMissesToilet, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
+import { groupByDay, wettingsOf, sometimesMissesToilet, awarenessReduced, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
 import type { VoidEntry, LeakEntry, NightEntry, WettingEntry, DrinkEntry } from './store';
 
 const H = 3_600_000;
@@ -87,6 +87,20 @@ describe('sometimesMissesToilet (the void-fork gate)', () => {
 
   it('is off for a protection user with no relevant symptom or trait', () => {
     expect(sometimesMissesToilet(['protection', 'nocturia'], { warningTime: '15+ min' })).toBe(false);
+  });
+});
+
+describe('awarenessReduced (the awareness-question gate)', () => {
+  it('is false for normal sensation / no relevant traits', () => {
+    expect(awarenessReduced({})).toBe(false);
+    expect(awarenessReduced({ fillingAwareness: 'Normal', warningTime: '15+ min' })).toBe(false);
+  });
+
+  it('is true when filling awareness, warning time, or leak noticing is reduced', () => {
+    expect(awarenessReduced({ fillingAwareness: 'Absent' })).toBe(true);
+    expect(awarenessReduced({ fillingAwareness: 'Delayed' })).toBe(true);
+    expect(awarenessReduced({ warningTime: 'Almost none' })).toBe(true);
+    expect(awarenessReduced({ leakNoticing: 'Usually find out after' })).toBe(true);
   });
 });
 
