@@ -1,0 +1,49 @@
+name: Deploy to Firebase Hosting
+
+# Every merge/push to main builds the app and deploys it live, so "merged" means
+# "on your phone". Requires one repo secret: FIREBASE_SERVICE_ACCOUNT — a Firebase
+# service-account JSON key with the Firebase Hosting Admin role. See README/PR notes.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hosting
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Core (pure-logic) tests + the app tests must pass before anything ships.
+      - name: Install core deps
+        run: npm ci
+      - name: Test core
+        run: npm test
+
+      - name: Install app deps
+        run: npm --prefix app ci
+      - name: Test app
+        run: npm --prefix app test
+
+      # Produce app/dist, which firebase.json serves as the hosting root.
+      - name: Build app
+        run: npm --prefix app run build
+
+      - name: Deploy to Firebase Hosting (live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: u-track-prod
+          channelId: live

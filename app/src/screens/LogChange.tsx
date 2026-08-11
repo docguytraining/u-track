@@ -29,8 +29,8 @@ export function LogChange() {
 
   return (
     <div className="screen">
-      <Topbar title="Change logged ✓" onBack={() => navigate('home')} />
-      <p className="lead">Logged. Weigh it for a real volume, or just note how full — either helps the picture.</p>
+      <Topbar title="Log a change" onBack={() => navigate('home')} />
+      <p className="lead">Weigh it for a real volume, or just note how full — then tap Done.</p>
 
       {wettingsSince.length > 0 && (
         <p className="note">
@@ -46,7 +46,7 @@ export function LogChange() {
       ) : (
         <>
           <div className="field">
-            <label>Which product did you take off?</label>
+            <label>Which product did you remove?</label>
             <div className="chips">
               {products.map((p) => (
                 <button key={p.id} className={productId === p.id ? 'selected' : ''} onClick={() => setProductId(p.id)}>

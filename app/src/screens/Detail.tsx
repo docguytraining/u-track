@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   classifyVoid,
   nocturiaCount,
@@ -12,9 +13,30 @@ import { voidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, timeStr, d
 import { fmtVol } from '../units';
 import { Icon, type IconName } from '../icons';
 
-const Row = ({ left, right }: { left: React.ReactNode; right: string }) => (
-  <div className="logline"><span>{left}</span><b>{right}</b></div>
-);
+/** A log line. When `onDelete` is given, a ✕ reveals a two-tap confirm — deletes are
+ * destructive and there's no undo, so we never fire on a single tap. */
+const Row = ({ left, right, onDelete }: { left: React.ReactNode; right: string; onDelete?: () => void }) => {
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className="logline">
+      <span>{left}</span>
+      <span className="spacer" />
+      {confirm ? (
+        <>
+          <button className="ghost" style={{ minHeight: 32, padding: '2px 10px', color: 'var(--warn)' }} onClick={onDelete}>Delete</button>
+          <button className="ghost" style={{ minHeight: 32, padding: '2px 10px' }} onClick={() => setConfirm(false)}>Cancel</button>
+        </>
+      ) : (
+        <>
+          <b>{right}</b>
+          {onDelete && (
+            <button className="ghost" aria-label="Delete this entry" style={{ minHeight: 32, padding: '2px 8px', marginLeft: 8, color: 'var(--muted)' }} onClick={() => setConfirm(true)}>✕</button>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
 
 /** An event glyph + time, so the diary log speaks the same icon language as the Home buttons. */
 const Stamp = ({ icon, at }: { icon: IconName; at: number }) => (
@@ -26,7 +48,7 @@ const ans = (a: Record<string, string>, keys: string[]) =>
 
 
 export function Detail() {
-  const { detail, entries, navigate, products, units } = useStore();
+  const { detail, entries, navigate, products, units, deleteEntry } = useStore();
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
@@ -55,6 +77,7 @@ export function Detail() {
     const sorted = [...entries].sort((a, b) => (b.kind === 'night' ? b.bedtime : b.at) - (a.kind === 'night' ? a.bedtime : a.at));
     body = (
       <div className="list">
+        {sorted.length > 0 && <p className="note">Tap ✕ to remove anything logged by accident.</p>}
         {sorted.length === 0 && <p className="note">Nothing logged yet.</p>}
         {sorted.map((e) => {
           // Every entry kind renders here — the diary log mixes them all. Missing a kind
@@ -73,14 +96,14 @@ export function Detail() {
               const a = ans(e.answers, ['urgency', 'leakSeverity', 'leakTrigger', 'stream']);
               if (a !== '—') parts.push(a);
               if (e.leaked) parts.push('leaked');
-              return <Row key={e.id} left={<><Stamp icon={icon} at={e.at} />{label}</>} right={parts.join(' · ') || '—'} />;
+              return <Row key={e.id} left={<><Stamp icon={icon} at={e.at} />{label}</>} right={parts.join(' · ') || '—'} onDelete={() => deleteEntry(e.id)} />;
             }
             case 'change':
-              return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} />;
+              return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} onDelete={() => deleteEntry(e.id)} />;
             case 'drink':
-              return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} />;
+              return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} onDelete={() => deleteEntry(e.id)} />;
             case 'night':
-              return <Row key={e.id} left={<><Icon name="morning" size={16} /> {dateStr(e.bedtime)}</>} right={ans(e.answers, ['howWasNight', 'wetDry'])} />;
+              return <Row key={e.id} left={<><Icon name="morning" size={16} /> {dateStr(e.bedtime)}</>} right={ans(e.answers, ['howWasNight', 'wetDry'])} onDelete={() => deleteEntry(e.id)} />;
           }
         })}
       </div>
