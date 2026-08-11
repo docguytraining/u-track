@@ -82,3 +82,26 @@ export function download(filename: string, content: string, mime: string) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Get the export file off the device. On an installed iOS PWA the `<a download>` trick is a
+ * dead end — WebKit ignores the download attribute in standalone mode, so the file has no way
+ * out. The Web Share API (with a File) is the path that works there: it opens the OS Share
+ * Sheet, letting the user save to Files, mail it to their clinician, etc. Where file-sharing
+ * isn't supported (most desktops), fall back to a normal download.
+ */
+export async function shareOrDownload(filename: string, content: string, mime: string) {
+  if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
+    const file = new File([content], filename, { type: mime });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename });
+      } catch {
+        // User dismissed the Share Sheet, or it failed — do nothing rather than surprise them
+        // with a download they didn't ask for.
+      }
+      return;
+    }
+  }
+  download(filename, content, mime);
+}
