@@ -12,23 +12,29 @@ export function LogLeak() {
   const gateway = gatewayQuestions('leak');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [at, setAt] = useState<number | null>(null);
+  const [containment, setContainment] = useState('');
   const [showMore, setShowMore] = useState(false);
 
+  const contained = containment === 'Stayed in my protection';
   const set = (qid: string, v: string) => setAnswers((a) => ({ ...a, [qid]: v }));
   const done = () => {
-    logLeak(answers, at ?? undefined);
+    // Record containment on the answers too, so it shows in the log/CSV, and pass it through so
+    // the entry lands in the right shape (contained vs reached clothing).
+    logLeak(containment ? { ...answers, containment } : answers, at ?? undefined, { contained });
     navigate('home');
   };
 
   return (
     <div className="screen">
       <Topbar title="Log a leak" onBack={() => navigate('home')} />
-      <p className="lead">A leak is urine that came out when you didn't mean it to — any amount, even a few drops you barely noticed, onto your clothing, skin, or the bed.</p>
+      <p className="lead">A leak is urine that came out when you didn't mean it to — any amount, even a few drops you barely noticed.</p>
+
       {usesProtection && (
-        <p className="note" style={{ marginTop: -6 }}>
-          If it went into your protection instead, log it as a{' '}
-          <button onClick={() => navigate('void')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>void into your product</button> — same event, just caught.
-        </p>
+        <OptionGroup
+          question={{ id: 'containment', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Where did it end up?', options: ['Stayed in my protection', 'Reached clothing or bed'] }}
+          value={containment}
+          onChange={setContainment}
+        />
       )}
 
       {core.map((q) => (

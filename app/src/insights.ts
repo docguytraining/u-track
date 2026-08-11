@@ -216,8 +216,10 @@ const SEVERITY_ML: Record<string, number> = { 'A few drops': 15, Damp: 40, Moder
 export function voidEffectiveMl(v: VoidEntry): { ml: number; estimated: boolean } | null {
   if (v.volumeMl != null) return { ml: v.volumeMl, estimated: false };
   if (v.size && SIZE_ML[v.size] != null) return { ml: SIZE_ML[v.size]!, estimated: true };
+  // Any involuntary loss with a reported severity — escaped or caught by protection — estimates
+  // from that severity (a contained leak carries no `size`, only `leakSeverity`).
   const sev = v.answers.leakSeverity;
-  if (v.leaked && sev && SEVERITY_ML[sev] != null) return { ml: SEVERITY_ML[sev]!, estimated: true };
+  if (sev && SEVERITY_ML[sev] != null) return { ml: SEVERITY_ML[sev]!, estimated: true };
   return null;
 }
 

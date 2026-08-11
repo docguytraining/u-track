@@ -216,7 +216,7 @@ interface Store extends State {
   signOut: () => void;
   completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
   logVoid: (v: { where?: VoidWhere; leaked?: boolean; volumeMl?: number | null; size?: string | null; productId?: string | null; answers: Record<string, string>; at?: number }) => void;
-  logLeak: (answers: Record<string, string>, at?: number) => void;
+  logLeak: (answers: Record<string, string>, at?: number, opts?: { contained?: boolean; productId?: string | null }) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   logCheckin: (c: { interference: number; bother: number }) => void;
@@ -446,8 +446,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logVoid: ({ where = 'toilet', leaked = false, volumeMl = null, size = null, productId = null, answers, at }) =>
         setState((s) => ({ ...s, notice: 'Void logged', entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where, leaked, volumeMl, size, productId, answers }] })),
       // The Leak fast-log: a void that escaped, reaching no toilet and no logged product.
-      logLeak: (answers, at) =>
-        setState((s) => ({ ...s, notice: 'Leak logged', entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where: null, leaked: true, volumeMl: null, size: null, productId: null, answers }] })),
+      // A leak is an involuntary loss; containment is just an attribute. If the product caught
+      // it, that's where='product', leaked=false (a contained episode — the same shape a "void
+      // into product" produces); if it reached clothing/bed, where=null, leaked=true. Either way
+      // the user logged a leak from the leak screen — no detour to the void screen.
+      logLeak: (answers, at, opts) =>
+        setState((s) => ({
+          ...s,
+          notice: 'Leak logged',
+          entries: [...s.entries, {
+            kind: 'void', id: id(), at: at ?? Date.now(),
+            where: opts?.contained ? 'product' : null,
+            leaked: !opts?.contained,
+            volumeMl: null, size: null,
+            productId: opts?.contained ? (opts.productId ?? null) : null,
+            answers,
+          }],
+        })),
       logChange: ({ productId, volumeMl, answers, at }) =>
         setState((s) => ({ ...s, notice: 'Change logged', entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>

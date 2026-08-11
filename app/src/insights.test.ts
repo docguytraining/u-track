@@ -294,3 +294,10 @@ describe('incontinenceEpisodesOf (unified leak symptom)', () => {
     expect(voidEffectiveMl(leak({ leakSeverity: 'A few drops' }))).toEqual({ ml: 15, estimated: true });
   });
 });
+
+describe('voidEffectiveMl — contained leak (severity, not escaped)', () => {
+  it('estimates a leak the product caught (where=product, leaked=false) from its severity', () => {
+    const contained: VoidEntry = { kind: 'void', id: 'c1', at: noon, where: 'product', leaked: false, volumeMl: null, size: null, productId: null, answers: { leakSeverity: 'Moderate' } };
+    expect(voidEffectiveMl(contained)).toEqual({ ml: 100, estimated: true });
+  });
+});
