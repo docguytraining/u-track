@@ -8,8 +8,8 @@ export function Topbar({ title, onBack, right }: { title: string; onBack?: () =>
   return (
     <div className="topbar">
       {onBack && (
-        <button className="ghost" style={{ minHeight: 40, padding: '6px 10px' }} onClick={onBack} aria-label="Back">
-          ‹
+        <button className="ghost" style={{ minHeight: 44, padding: '6px 12px' }} onClick={onBack} aria-label="Back">
+          <span aria-hidden="true">‹</span>
         </button>
       )}
       <h1>{title}</h1>
@@ -31,11 +31,13 @@ export function OptionGroup({
 }) {
   return (
     <div className="field">
-      <label>{question.prompt}</label>
-      <div className="chips">
+      <label id={`q-${question.id}`}>{question.prompt}</label>
+      <div className="chips" role="radiogroup" aria-labelledby={`q-${question.id}`}>
         {question.options.map((opt) => (
           <button
             key={opt}
+            role="radio"
+            aria-checked={value === opt}
             className={value === opt ? 'selected' : ''}
             onClick={() => onChange(opt)}
           >
@@ -103,6 +105,7 @@ export function VolumeField({
             className="numinput"
             type="number"
             inputMode="numeric"
+            aria-label="Wet weight in grams"
             placeholder="Wet weight (g)"
             value={wet}
             onChange={(e) => { setWet(e.target.value); recompute(productId, e.target.value); }}
@@ -139,6 +142,7 @@ export function WhenField({ value, onChange }: { value: number | null; onChange:
         <input
           className="numinput"
           type="datetime-local"
+          aria-label="Date and time"
           value={toLocal(value)}
           onChange={(e) => { const ms = new Date(e.target.value).getTime(); if (!Number.isNaN(ms)) onChange(ms); }}
         />

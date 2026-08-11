@@ -6,13 +6,14 @@ import { voidedVolumeStats } from '@core';
 import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, type HourBucket } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
+import { Icon } from '../icons';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
   return (
     <button className="card block" onClick={onClick}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>{title}</h3>
-        <span style={{ color: 'var(--muted)' }}>›</span>
+        <span style={{ color: 'var(--muted)' }} aria-hidden="true">›</span>
       </div>
       <div style={{ marginTop: 10 }}>{children}</div>
     </button>
@@ -50,6 +51,13 @@ function RhythmCard({ buckets, days, total, peak }: { buckets: HourBucket[]; day
           );
         })}
       </div>
+      {/* The bars are aria-hidden (not semantic); this is the same data as text for screen readers. */}
+      <p className="sr-only">
+        Voids and leaks by hour of day:{' '}
+        {buckets.filter((b) => b.voids + b.leaks > 0).map((b) =>
+          `${fmtHour(b.hour)} ${b.voids} void${b.voids === 1 ? '' : 's'}${b.leaks ? `, ${b.leaks} leak${b.leaks === 1 ? '' : 's'}` : ''}`,
+        ).join('; ')}.
+      </p>
       <div className="rhythm-axis"><span>12am</span><span>6am</span><span>noon</span><span>6pm</span><span>12am</span></div>
       <div className="rhythm-legend">
         <span className="key"><span className="swatch" style={{ background: 'var(--accent)' }} />voids</span>
@@ -124,19 +132,39 @@ export function Report() {
   const qualityPct = cap.voids ? Math.round((cap.measured / cap.voids) * 100) : 0;
   const measuredDays = groupByDay(entries).filter((d) => d.night && d.voids.length > 0 && d.voids.every((v) => v.volumeMl != null)).length;
 
+  // Before there's any data, don't show a wall of zeros — show what will happen and where
+  // to start. Matter-of-fact and encouraging, per the app's no-judgment voice.
+  if (entries.length === 0) {
+    return (
+      <div className="screen">
+        <Topbar title="Report" onBack={() => navigate('home')} />
+        <div className="card" style={{ textAlign: 'center', padding: '28px 18px' }}>
+          <h3 style={{ marginBottom: 8 }}>Nothing logged yet</h3>
+          <p className="sub">
+            Log a void, drink, or leak from the home screen. After a day or two this fills in with your
+            patterns — and a frequency-volume chart you can hand to your doctor.
+          </p>
+        </div>
+        <button className="primary block center" onClick={() => navigate('home')}>Go to the log</button>
+        {import.meta.env.DEV && <button className="ghost block center" onClick={loadSample}>Load a few weeks of sample data</button>}
+      </div>
+    );
+  }
+
   return (
     <div className="screen">
       <Topbar title="Report" onBack={() => navigate('home')} />
       <p className="lead">Tap any card to see the data behind it.</p>
 
       <button className="primary block center" onClick={() => navigate('chart')}>
-        📄 Frequency-volume chart · {measuredDays} of 3 measured days
+        <Icon name="chart" size={18} /> Frequency-volume chart · {measuredDays} of 3 measured days
       </button>
       {entries.length > 0 && (
         <button className="ghost block center" onClick={copySummary}>
-          {copied ? '✓ Copied — paste into a message to your doctor' : '📋 Copy summary for your doctor'}
+          {copied ? 'Copied — paste into a message to your doctor' : <><Icon name="copy" size={18} /> Copy summary for your doctor</>}
         </button>
       )}
+      <span className="sr-only" role="status">{copied ? 'Summary copied to clipboard.' : ''}</span>
       {cap.voids > 0 && (
         <div className={qualityPct === 100 ? 'pill ok' : 'pill warn'} style={{ alignSelf: 'flex-start' }}>
           Data quality: {cap.measured} of {cap.voids} voids measured ({qualityPct}%)
@@ -145,8 +173,12 @@ export function Report() {
 
       <Card title="Bladder capacity" onClick={() => navigate('chart')}>
         <div className="grid">
-          <Metric n={fmtVol(cap.maxMl, units)} label="functional (max void)" />
+          <Metric n={fmtVol(cap.maxMl, units)} label="largest void" />
           <Metric n={fmtVol(cap.averageMl, units)} label="average void" />
+        </div>
+        <div className="sub" style={{ marginTop: 10 }}>
+          Your largest single void is the closest everyday sign of how much your bladder comfortably holds
+          (clinicians call it functional capacity).
         </div>
       </Card>
 
@@ -199,6 +231,10 @@ export function Report() {
             />
             {has('nightWetting') && <Metric n={wetNights} label="wet nights" />}
             {has('nightWetting') && <Metric n={dryNights} label="dry nights" />}
+          </div>
+          <div className="sub" style={{ marginTop: 10 }}>
+            NPi (nocturnal polyuria index) is the share of your whole day’s urine your body makes overnight.
+            Above about a third (33%) is worth asking your doctor about — on its own it doesn’t mean anything is wrong.
           </div>
           {measured && !measured.complete && <div className="pill warn" style={{ marginTop: 12 }}>{measured.incompleteNote}</div>}
           {measured?.npi.overThreshold && <div className="pill warn" style={{ marginTop: 12 }}>Over 33% threshold</div>}

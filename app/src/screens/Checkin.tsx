@@ -10,13 +10,13 @@ import { dateStr } from '../insights';
  * Deliberately about *interference with your life*, not "how bad do you feel" — matter of
  * fact, nothing to pass or fail.
  */
-function Scale({ value, onChange }: { value: number | null; onChange: (n: number) => void }) {
+function Scale({ value, onChange, label }: { value: number | null; onChange: (n: number) => void; label: string }) {
   return (
     <>
       <p className="note" style={{ marginTop: -2 }}>0 = not at all · 10 = a great deal</p>
-      <div className="chips">
+      <div className="chips" role="radiogroup" aria-label={label}>
         {Array.from({ length: 11 }, (_, n) => (
-          <button key={n} className={value === n ? 'selected' : ''} onClick={() => onChange(n)}>{n}</button>
+          <button key={n} role="radio" aria-checked={value === n} aria-label={`${n} out of 10`} className={value === n ? 'selected' : ''} onClick={() => onChange(n)}>{n}</button>
         ))}
       </div>
     </>
@@ -76,12 +76,12 @@ export function Checkin() {
 
       <div className="field">
         <label>Over the past week, how much did your urinary symptoms get in the way of your day-to-day activities?</label>
-        <Scale value={interference} onChange={setInterference} />
+        <Scale value={interference} onChange={setInterference} label="Interference with day-to-day activities, 0 to 10" />
       </div>
 
       <div className="field">
         <label>And over the past week, how much did they bother you?</label>
-        <Scale value={bother} onChange={setBother} />
+        <Scale value={bother} onChange={setBother} label="How much it bothered you, 0 to 10" />
       </div>
 
       {checkins.length > 0 && <Trend checkins={checkins} />}
