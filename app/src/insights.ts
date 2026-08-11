@@ -6,6 +6,34 @@ import type { LogEntry, VoidEntry, NightEntry, ChangeEntry, DrinkEntry, Product 
 export const productsForContext = (products: readonly Product[], context: 'day' | 'night') =>
   products.filter((p) => p.usage == null || p.usage === 'both' || p.usage === context);
 
+/** How each overnight product held up — nights worn vs. nights it leaked through. The raw
+ * material for the adequacy readout. Sorted worst-performing first. */
+export interface ProductNights {
+  productId: string;
+  name: string;
+  nights: number;
+  leaks: number;
+}
+export function productAdequacy(nights: readonly NightEntry[], products: readonly Product[]): ProductNights[] {
+  const byId = new Map<string, { nights: number; leaks: number }>();
+  for (const n of nights) {
+    const pid = n.answers.protectionProductId;
+    if (!pid || pid === 'none') continue;
+    const rec = byId.get(pid) ?? { nights: 0, leaks: 0 };
+    rec.nights++;
+    if (n.answers.leakedThrough === 'Yes') rec.leaks++;
+    byId.set(pid, rec);
+  }
+  return [...byId.entries()]
+    .map(([productId, r]) => ({ productId, name: products.find((p) => p.id === productId)?.name ?? 'a product', nights: r.nights, leaks: r.leaks }))
+    .sort((a, b) => b.leaks / b.nights - a.leaks / a.nights);
+}
+
+/** Products that leaked on at least `rate` of at least `minNights` nights — the ones worth
+ * a provider conversation. The min sample keeps a single bad night from nagging. */
+export const leakyProducts = (stats: ProductNights[], minNights = 3, rate = 0.5): ProductNights[] =>
+  stats.filter((s) => s.nights >= minNights && s.leaks / s.nights >= rate);
+
 /** Every bladder emptying, whatever its destination — the base for frequency. */
 export const voidsOf = (e: readonly LogEntry[]) => e.filter((x): x is VoidEntry => x.kind === 'void');
 /** Voids that reached the toilet — the bathroom trips that feed capacity/nocturia/NUV. */

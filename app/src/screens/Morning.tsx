@@ -169,6 +169,16 @@ export function Morning() {
         </div>
       )}
 
+      {/* Containment failure overnight — the signal that pairs with the product worn to tell
+          you whether your protection is keeping up. */}
+      {wet && usesProtection && (
+        <OptionGroup
+          question={{ id: 'leakedThrough', surface: 'morning', coreEligible: false, priority: 0, prompt: 'Did it leak through — onto the bed or your clothes?', options: ['No', 'Yes'] }}
+          value={answers.leakedThrough}
+          onChange={(v) => set('leakedThrough', v)}
+        />
+      )}
+
       {/* First void after getting up — the single most useful number. It can land in the
           toilet OR the product even on a wet morning, so we ask where before assuming. */}
       <div className="field">

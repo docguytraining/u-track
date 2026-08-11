@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 
@@ -23,11 +23,13 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 );
 
 export function Report() {
-  const { entries, enabledModules, drinkTypes, units, reports, navigate, openDetail, loadSample } = useStore();
+  const { entries, enabledModules, drinkTypes, units, reports, products, navigate, openDetail, loadSample } = useStore();
   const voids = voidsOf(entries);
   const toiletVoids = toiletVoidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
+  const adequacy = productAdequacy(nights, products);
+  const leaky = leakyProducts(adequacy);
   const changes = changesOf(entries);
   const wettings = wettingsOf(entries);
   const drinks = drinksOf(entries);
@@ -131,6 +133,27 @@ export function Report() {
               {trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} from toilet voids alone.
             </div>
           )}
+        </Card>
+      )}
+
+      {has('protection') && adequacy.length > 0 && (
+        <Card title="Overnight protection" onClick={() => openDetail('nights')}>
+          <div className="list">
+            {adequacy.map((a) => (
+              <div className="logline" key={a.productId}>
+                <span>{a.name}</span>
+                <b>{a.leaks > 0 ? `leaked ${a.leaks} of ${a.nights} night${a.nights > 1 ? 's' : ''}` : `held · ${a.nights} night${a.nights > 1 ? 's' : ''}`}</b>
+              </div>
+            ))}
+          </div>
+          {/* Equipping, not prescribing: the person's own numbers + words for a conversation
+              with the one qualified to answer. Deliberately calm styling, never a red alert. */}
+          {leaky.map((a) => (
+            <div key={a.productId} className="sub" style={{ marginTop: 12, paddingLeft: 10, borderLeft: '3px solid var(--accent)' }}>
+              Overnight leaks: {a.leaks} of the last {a.nights} nights with {a.name}. If it’d help, that’s worth
+              raising with your provider — people often ask about higher-capacity protection or ways to cut down on leaks.
+            </div>
+          ))}
         </Card>
       )}
 
