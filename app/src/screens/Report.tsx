@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
+import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
 import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, type HourBucket } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
@@ -83,6 +84,17 @@ export function Report() {
   const rhythm = hourlyRhythm(entries);
   const has = (m: string) => enabledModules.includes(m);
 
+  // A paste-able plain-text summary for a patient-portal message or a phone call with a
+  // nurse — the gap between the raw CSV and the printable chart.
+  const [copied, setCopied] = useState(false);
+  const copySummary = () => {
+    const text = buildClinicalSummary(entries, checkins, meds, products, units);
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }).catch(() => {});
+  };
+
   const intakeMl = drinks.reduce((s, d) => s + (d.volumeMl ?? 0), 0);
   const eveningMl = drinks.filter((d) => new Date(d.at).getHours() >= 18).reduce((s, d) => s + (d.volumeMl ?? 0), 0);
   const caffeineN = drinks.filter((d) => isCaffeine(d.type)).length;
@@ -120,6 +132,11 @@ export function Report() {
       <button className="primary block center" onClick={() => navigate('chart')}>
         📄 Frequency-volume chart · {measuredDays} of 3 measured days
       </button>
+      {entries.length > 0 && (
+        <button className="ghost block center" onClick={copySummary}>
+          {copied ? '✓ Copied — paste into a message to your doctor' : '📋 Copy summary for your doctor'}
+        </button>
+      )}
       {cap.voids > 0 && (
         <div className={qualityPct === 100 ? 'pill ok' : 'pill warn'} style={{ alignSelf: 'flex-start' }}>
           Data quality: {cap.measured} of {cap.voids} voids measured ({qualityPct}%)
