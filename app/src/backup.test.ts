@@ -18,6 +18,18 @@ describe('eventsToCsv', () => {
     expect(csv).toContain('"Coffee, black"'); // a cell with a comma is quoted
     expect(csv).toContain('250');
   });
+
+  it('neutralizes spreadsheet formula injection in user-controlled cells', () => {
+    const nasty: Product[] = [{ id: 'p1', name: '=HYPERLINK("http://evil","click")', dryGrams: 100 }];
+    const entries: LogEntry[] = [
+      { kind: 'change', id: 'c1', at: Date.UTC(2026, 7, 5, 9), productId: 'p1', volumeMl: 50, answers: {} },
+    ];
+    const csv = eventsToCsv(entries, nasty);
+    // The formula must be defused with a leading apostrophe (inside the quoted cell), never
+    // emitted so a spreadsheet would execute it.
+    expect(csv).toContain(`"'=HYPERLINK`);
+    expect(csv).not.toMatch(/,=HYPERLINK/);
+  });
 });
 
 describe('parseBackup', () => {

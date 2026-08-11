@@ -345,7 +345,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       openDetail: (key) => setState((s) => ({ ...s, screen: 'detail', detail: key })),
       signIn: () => { void signInWithGoogle().catch(() => {}); },
       // Sign out returns to a clean guest state so no data lingers on the shared device.
-      signOut: () => { void signOutUser().finally(() => setState(() => ({ ...initial, authReady: true }))); },
+      // signOutUser wipes the on-disk Firestore cache and terminates the DB, so when cloud is
+      // active we reload to re-init a fresh instance; local-only mode just resets in place.
+      signOut: () => {
+        void signOutUser().finally(() => {
+          if (cloudEnabled && typeof window !== 'undefined') window.location.reload();
+          else setState(() => ({ ...initial, authReady: true }));
+        });
+      },
       completeOnboarding: (modules, traits, productTiers) =>
         setState((s) => {
           // Auto-create a library product for each absorbency tier the user selected,
@@ -453,7 +460,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreBackup: (data) =>
         setState((s) => {
           const next: State = { ...s };
-          for (const k of PERSIST_KEYS) if (data[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = data[k];
+          // Validate each field's type before adopting it. A hand-edited or hostile backup can
+          // set a field to the wrong shape (e.g. products as a number); copying it verbatim
+          // would crash the screens that map over it — and the corruption would then sync to
+          // the cloud and survive reload. Anything malformed is dropped, keeping the current value.
+          const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+          const objArr = (v: unknown): v is Record<string, unknown>[] => Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && !Array.isArray(x));
+          if (typeof data.onboarded === 'boolean') next.onboarded = data.onboarded;
+          if (strArr(data.enabledModules)) next.enabledModules = data.enabledModules;
+          if (data.traits && typeof data.traits === 'object' && !Array.isArray(data.traits)) next.traits = data.traits as Record<string, string>;
+          if (objArr(data.products)) next.products = data.products as unknown as Product[];
+          if (strArr(data.drinkTypes)) next.drinkTypes = data.drinkTypes;
+          if (data.units === 'ml' || data.units === 'oz') next.units = data.units;
+          if (objArr(data.checkins)) next.checkins = data.checkins as unknown as CheckIn[];
+          if (objArr(data.meds)) next.meds = data.meds as unknown as Med[];
           // Bring restored entries up to the current shape (old backups may predate the model).
           next.entries = normalizeEntries(Array.isArray(data.entries) ? (data.entries as unknown[]) : s.entries);
           return next;

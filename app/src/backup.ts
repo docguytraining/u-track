@@ -7,7 +7,15 @@ import type { LogEntry, Product } from './store';
  * OUT (and back in) is a feature, not an afterthought.
  */
 
-const csvCell = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+const csvCell = (s: string) => {
+  let v = s ?? '';
+  // Spreadsheet formula-injection guard: a product name or note like "=CMD()" or "+HYPERLINK(...)"
+  // is executed as a formula when the CSV is opened in Excel/Sheets. Prefixing a value that
+  // begins with = + - @ (or a control char) with an apostrophe makes the app treat it as literal
+  // text. The export is health data people open in a spreadsheet, so this matters.
+  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
+  return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+};
 
 /** One flat, readable row per event — date, time, type, a plain summary, volume, product. */
 export function eventsToCsv(entries: readonly LogEntry[], products: readonly Product[]): string {

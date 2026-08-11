@@ -18,6 +18,8 @@ import {
   initializeFirestore,
   persistentLocalCache,
   connectFirestoreEmulator,
+  terminate,
+  clearIndexedDbPersistence,
   type Firestore,
 } from 'firebase/firestore';
 
@@ -88,6 +90,18 @@ export const completeMagicLink = async (): Promise<User | null> => {
   return res.user;
 };
 
-export const signOutUser = () => (authRef ? signOut(authRef) : Promise.resolve());
+export const signOutUser = async () => {
+  if (!authRef) return;
+  await signOut(authRef);
+  // Wipe the on-disk Firestore cache so the signed-out user's diary doesn't linger in
+  // IndexedDB on a shared device. Best-effort: terminate then clear (needs no other open
+  // tab holding the DB). The caller reloads afterward to re-init a fresh Firestore.
+  if (dbRef && !useEmulator) {
+    try {
+      await terminate(dbRef);
+      await clearIndexedDbPersistence(dbRef);
+    } catch { /* another tab open, or nothing cached — ignore */ }
+  }
+};
 export const onAuth = (cb: (u: User | null) => void) => (authRef ? onAuthStateChanged(authRef, cb) : () => {});
 export type { User };
