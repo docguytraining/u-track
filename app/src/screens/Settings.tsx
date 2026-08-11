@@ -3,6 +3,7 @@ import { useStore, type ProductUsage } from '../store';
 import { Topbar } from '../ui';
 import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
+import { eventsToCsv, buildBackup, parseBackup, download } from '../backup';
 import { cloudEnabled, usingEmulator } from '../firebase';
 
 const USAGE_OPTS: { value: ProductUsage; label: string }[] = [
@@ -12,7 +13,25 @@ const USAGE_OPTS: { value: ProductUsage; label: string }[] = [
 ];
 
 export function Settings() {
-  const { enabledModules, traits, products, drinkTypes, units, entries, user, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
+  const { onboarded, enabledModules, traits, products, drinkTypes, units, entries, user, navigate, reset, loadSample, restoreBackup, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
+  const [restoreMsg, setRestoreMsg] = useState('');
+  const today = new Date().toISOString().slice(0, 10);
+
+  const onRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = parseBackup(String(reader.result));
+      if (!data) return setRestoreMsg('That doesn’t look like a u-track backup file.');
+      if (window.confirm('Replace your current diary with this backup? Your current data will be overwritten.')) {
+        restoreBackup(data);
+        setRestoreMsg(`Restored ${(data.entries as unknown[])?.length ?? 0} events from backup.`);
+      }
+    };
+    reader.readAsText(file);
+  };
   const removedDrinks = DEFAULT_DRINK_NAMES.filter((d) => !drinkTypes.includes(d));
   const [tier, setTier] = useState('');
   const [name, setName] = useState('');
@@ -165,6 +184,21 @@ export function Settings() {
         <div className="sub" style={{ marginTop: 6 }}>
           {entries.length} events · {user ? 'synced to your account' : 'on this device only — sign in to save'}.
         </div>
+        <div className="sub" style={{ marginTop: 6 }}>It’s yours — take it with you. Export it for a spreadsheet or your doctor, or keep a backup so a cleared browser or a new phone never loses your history.</div>
+
+        <button className="block center" style={{ marginTop: 10 }} disabled={entries.length === 0}
+          onClick={() => download(`u-track-events-${today}.csv`, eventsToCsv(entries, products), 'text/csv')}>
+          Export events (CSV)
+        </button>
+        <button className="block center" style={{ marginTop: 8 }} disabled={entries.length === 0}
+          onClick={() => download(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries }, new Date().toISOString()), null, 2), 'application/json')}>
+          Download backup (JSON)
+        </button>
+        <label className="ghost block center" style={{ marginTop: 8, cursor: 'pointer', display: 'block', padding: '12px' }}>
+          Restore from a backup…
+          <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={onRestore} />
+        </label>
+        {restoreMsg && <p className="note" style={{ marginTop: 6 }}>{restoreMsg}</p>}
       </div>
 
       <div className="spacer-v" />
