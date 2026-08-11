@@ -2,6 +2,7 @@ export type ScreenKey =
   | 'splash'
   | 'signin'
   | 'onboarding'
+  | 'log'
   | 'void'
   | 'leak'
   | 'change'
@@ -14,7 +15,7 @@ export type ScreenKey =
   | 'settings'
   | 'home';
 
-const ROUTED: ScreenKey[] = ['void', 'leak', 'change', 'drink', 'morning', 'checkin', 'report', 'chart', 'detail', 'settings'];
+const ROUTED: ScreenKey[] = ['log', 'void', 'leak', 'change', 'drink', 'morning', 'checkin', 'report', 'chart', 'detail', 'settings'];
 
 /**
  * Pure routing decision. Order matters:

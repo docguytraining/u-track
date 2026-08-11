@@ -33,7 +33,7 @@ describe('buildClinicalSummary', () => {
     expect(out).toContain('toilet voids/day');
     expect(out).toContain('functional (max void) 300 ml'); // measured max
     expect(out).toContain('average 250 ml'); // (300+200)/2
-    expect(out).toContain('Leaks: 2, most often urge');
+    expect(out).toContain('Leaks (incontinence episodes): 2 (2 reached clothing/bed), most often urge');
     expect(out).toContain('Weekly check-in (latest of 1): interference 6/10, bother 5/10');
     expect(out).toContain('Medications: Furosemide (evening)');
     expect(out).toContain('self-reported');

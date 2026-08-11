@@ -30,7 +30,9 @@ export function eventsToCsv(entries: readonly LogEntry[], products: readonly Pro
     let ml = '';
     let prod = '';
     if (e.kind === 'void') {
-      type = e.leaked ? 'leak' : e.where === 'product' || e.where === 'both' ? 'wetting' : 'void';
+      // Continence terms for the clinician: a clean toilet trip is a void; anything involuntary
+      // is a leak (an incontinence episode), qualified by whether it escaped or the product caught it.
+      type = e.leaked ? 'leak (escaped)' : e.where === 'product' || e.where === 'both' ? 'leak (into product)' : 'void';
       detail = [e.where ?? '', e.leaked ? 'leaked' : '', e.size ?? '', e.answers.urgency, e.answers.leakSeverity, e.answers.leakTrigger].filter(Boolean).join('; ');
       ml = e.volumeMl != null ? String(e.volumeMl) : '';
       prod = name(e.productId);

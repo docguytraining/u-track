@@ -37,9 +37,8 @@ export function Home() {
       )}
 
       {/* Fast path: the moment-to-moment actions, front and center. Nothing to read. */}
-      <button className="big center block" onClick={() => navigate('void')}><Icon name="void" /> Void</button>
+      <button className="big center block" onClick={() => navigate('log')}><Icon name="void" /> Void / leak</button>
       <button className="big center block" onClick={() => navigate('drink')}><Icon name="drink" /> Drink</button>
-      <button className="big center block" onClick={() => navigate('leak')}><Icon name="leak" /> Leak</button>
       {enabledModules.includes('protection') && (
         <button className="big center block" onClick={() => navigate('change')}><Icon name="change" /> Change</button>
       )}

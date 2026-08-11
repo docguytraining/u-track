@@ -55,7 +55,7 @@ export interface AppUser {
   email: string | null;
 }
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'checkin' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
+export type Screen = 'onboarding' | 'home' | 'log' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'checkin' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
 
 /** A weekly quality-of-life check-in — the "how much is this affecting you" side of a
  * clinical questionnaire, tracked over time. Two 0–10 scales, kept apart from `entries`. */
@@ -122,6 +122,10 @@ export interface ChangeEntry {
   at: number;
   productId: string | null;
   volumeMl: number | null;
+  /** How long the product had been worn, ms — the window this absorbed volume accrued over.
+   * Defaults to the gap since the last change (capped at 12h), adjustable at log time. Powers a
+   * soak *rate* and the "wetter than you logged" (unnoticed-loss) signal. */
+  wearMs?: number;
   answers: Record<string, string>;
 }
 /** A drink — fluid intake, the input side of the frequency-volume chart. */
@@ -216,8 +220,11 @@ interface Store extends State {
   signOut: () => void;
   completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
   logVoid: (v: { where?: VoidWhere; leaked?: boolean; volumeMl?: number | null; size?: string | null; productId?: string | null; answers: Record<string, string>; at?: number }) => void;
-  logLeak: (answers: Record<string, string>, at?: number) => void;
-  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
+  logLeak: (answers: Record<string, string>, at?: number, opts?: { contained?: boolean; productId?: string | null }) => void;
+  /** The unified single-button log: one event described by where it went + how much, from which
+   * the void/leak distinction and continence are derived. `escaped` only applies to a product. */
+  logEvent: (e: { where: 'toilet' | 'product' | 'clothing'; size: string | null; escaped?: boolean; volumeMl?: number | null; productId?: string | null; answers?: Record<string, string>; at?: number }) => void;
+  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number; wearMs?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   logCheckin: (c: { interference: number; bother: number }) => void;
   addMed: (name: string, timing: MedTiming) => void;
@@ -446,10 +453,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logVoid: ({ where = 'toilet', leaked = false, volumeMl = null, size = null, productId = null, answers, at }) =>
         setState((s) => ({ ...s, notice: 'Void logged', entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where, leaked, volumeMl, size, productId, answers }] })),
       // The Leak fast-log: a void that escaped, reaching no toilet and no logged product.
-      logLeak: (answers, at) =>
-        setState((s) => ({ ...s, notice: 'Leak logged', entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where: null, leaked: true, volumeMl: null, size: null, productId: null, answers }] })),
-      logChange: ({ productId, volumeMl, answers, at }) =>
-        setState((s) => ({ ...s, notice: 'Change logged', entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
+      // A leak is an involuntary loss; containment is just an attribute. If the product caught
+      // it, that's where='product', leaked=false (a contained episode — the same shape a "void
+      // into product" produces); if it reached clothing/bed, where=null, leaked=true. Either way
+      // the user logged a leak from the leak screen — no detour to the void screen.
+      logLeak: (answers, at, opts) =>
+        setState((s) => ({
+          ...s,
+          notice: 'Leak logged',
+          entries: [...s.entries, {
+            kind: 'void', id: id(), at: at ?? Date.now(),
+            where: opts?.contained ? 'product' : null,
+            leaked: !opts?.contained,
+            volumeMl: null, size: null,
+            productId: opts?.contained ? (opts.productId ?? null) : null,
+            answers,
+          }],
+        })),
+      // Translate the unified event into the stored void record. Continence is where it went:
+      // toilet = a continent void (may carry a measured volume on a 24-hour check); into product
+      // or onto clothing = an involuntary loss (a leak), with `leaked` marking whether it escaped
+      // containment. "Void" vs "leak" is never stored — it's read back off `where`/`leaked`.
+      logEvent: ({ where, size, escaped = false, volumeMl = null, productId = null, answers = {}, at }) =>
+        setState((s) => ({
+          ...s,
+          notice: where === 'toilet' ? 'Void logged' : 'Leak logged',
+          entries: [...s.entries, {
+            kind: 'void', id: id(), at: at ?? Date.now(),
+            where: where === 'clothing' ? null : where,
+            leaked: where === 'clothing' ? true : where === 'product' ? escaped : false,
+            // Measured volume is a 24-hour-check thing and only applies to a toilet void; the
+            // qualitative size is kept for every event (it's what estimates volume off-check).
+            volumeMl: where === 'toilet' ? volumeMl : null,
+            size,
+            productId: where === 'product' ? productId : null,
+            answers,
+          }],
+        })),
+      logChange: ({ productId, volumeMl, answers, at, wearMs }) =>
+        setState((s) => ({ ...s, notice: 'Change logged', entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, wearMs, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
         setState((s) => ({ ...s, notice: 'Drink logged', entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       logCheckin: ({ interference, bother }) =>

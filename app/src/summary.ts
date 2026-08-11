@@ -9,6 +9,7 @@ import {
   toiletVoidsOf,
   leaksOf,
   wettingsOf,
+  incontinenceEpisodesOf,
   nightsOf,
   groupByDay,
   isWetNight,
@@ -61,7 +62,7 @@ export function buildClinicalSummary(
   // Frequency: toilet trips, plus total emptyings when wettings into protection exist.
   const voidsPerDay = (toilet.length / days).toFixed(1);
   let freq = `Voiding: ${voidsPerDay} toilet void${toilet.length === 1 ? '' : 's'}/day`;
-  if (wettings.length > 0) freq += `; ${(allVoids.length / days).toFixed(1)} total bladder emptyings/day counting wettings into protection`;
+  if (wettings.length > 0) freq += `; ${(allVoids.length / days).toFixed(1)} total bladder emptyings/day counting leaks into protection`;
   lines.push(freq + '.');
 
   // Capacity from measured toilet voids only.
@@ -84,11 +85,18 @@ export function buildClinicalSummary(
     if (wet + dry > 0) lines.push(`Wet nights ${wet}, dry nights ${dry}.`);
   }
 
-  // Leaks with the most common trigger, if any recorded.
-  if (leaks.length > 0) {
-    const triggers = tally(leaks, 'leakTrigger');
+  // Incontinence episodes (leaks): every involuntary loss, split by containment, with the most
+  // common trigger. "Escaped" reached clothing/bed; "caught" stayed in protection.
+  const episodes = incontinenceEpisodesOf(entries);
+  if (episodes.length > 0) {
+    const escaped = leaks.length; // leaked === true
+    const caught = episodes.length - escaped;
+    const parts = [];
+    if (escaped) parts.push(`${escaped} reached clothing/bed`);
+    if (caught) parts.push(`${caught} caught by protection`);
+    const triggers = tally(episodes, 'leakTrigger');
     const top = Object.entries(triggers).sort((a, b) => b[1] - a[1])[0];
-    lines.push(`Leaks: ${leaks.length}${top ? `, most often ${top[0].toLowerCase()}` : ''}.`);
+    lines.push(`Leaks (incontinence episodes): ${episodes.length}${parts.length ? ` (${parts.join(', ')})` : ''}${top ? `, most often ${top[0].toLowerCase()}` : ''}.`);
   }
 
   // Overnight product adequacy — only products that leaked overnight.

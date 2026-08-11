@@ -3,9 +3,9 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, type HourBucket } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, voidClusterPatterns, unnoticedLosses, rapidSaturation, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern, type ClusterPattern, type UnnoticedLoss, type RapidSaturation } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
-import { fmtVol } from '../units';
+import { fmtVol, type Units } from '../units';
 import { Icon } from '../icons';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
@@ -73,6 +73,106 @@ function RhythmCard({ buckets, days, total, peak }: { buckets: HourBucket[]; day
   );
 }
 
+/** Recurring high-volume episodes at a consistent time of day. Descriptive, not a diagnosis —
+ * the copy points the person at their provider, matching the rhythm card's voice. */
+function SurgeCard({ patterns }: { patterns: SurgePattern[] }) {
+  const isOvernight = (min: number) => { const h = Math.floor(min / 60); return h >= 22 || h < 6; };
+  const anyEstimated = patterns.some((p) => p.estimated);
+  return (
+    <div className="card">
+      <h3>High-volume episodes</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        A lot passed in a short time (≥{SURGE_THRESHOLD_ML} mL within ~2 hours), recurring at the same time of day.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {patterns.map((p, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            Around <b>{minuteOfDayStr(p.minuteOfDay)}</b> on <b>{p.days}</b> of {p.periodDays} tracked days
+            {isOvernight(p.minuteOfDay) ? ' — overnight; worth mentioning to your provider' : ''}.
+          </li>
+        ))}
+      </ul>
+      {anyEstimated && (
+        <div className="sub" style={{ marginTop: 8 }}>
+          Some volumes are estimated from the size you reported, not measured — log a few measured days for firmer numbers.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Clustered voiding at a consistent time of day — repeated emptyings close together. The
+ * volumes carry the clinical distinction (a lot = can't hold; a little = not emptying / can't
+ * hold even a little), so we show them when measured and let the provider read it. */
+function ClusterCard({ patterns, units }: { patterns: ClusterPattern[]; units: Units }) {
+  return (
+    <div className="card">
+      <h3>Clustered voiding</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        Several emptyings packed close together, recurring at the same time of day — going again and again in a short span.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {patterns.map((p, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            Around <b>{minuteOfDayStr(p.minuteOfDay)}</b> — about <b>{p.typicalVoids}</b> emptyings within an hour, on <b>{p.days}</b> of {p.periodDays} tracked days
+            {p.typicalMl != null ? ` (~${fmtVol(p.typicalMl, units)} in that hour)` : ''}.
+          </li>
+        ))}
+      </ul>
+      <div className="sub" style={{ marginTop: 8 }}>
+        Trips this close together can mean the bladder isn't emptying fully or isn't holding — worth mentioning to your provider.
+      </div>
+    </div>
+  );
+}
+
+/** Changes that came back wetter than what was logged — losses the user likely didn't feel,
+ * derived, never asked. The wear time turns "soaked" into a rate the provider can read. */
+function UnnoticedLossCard({ losses, units }: { losses: UnnoticedLoss[]; units: Units }) {
+  return (
+    <div className="card">
+      <h3>Losses you may not feel</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        A product came back holding more than was logged into it — the gap is likely urine that escaped your notice.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {losses.slice(0, 4).map((l, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            {l.productName ? <b>{l.productName}</b> : 'A product'} held <b>{fmtVol(l.absorbedMl, units)}</b>
+            {l.wearMs ? ` over ~${Math.round(l.wearMs / 3_600_000)}h` : ''}, but only {fmtVol(l.loggedMl, units)} was logged — about <b>{fmtVol(l.shortfallMl, units)}</b> you may not have felt.
+          </li>
+        ))}
+      </ul>
+      <div className="sub" style={{ marginTop: 8 }}>
+        Losing urine you don't sense is worth mentioning to your provider.
+      </div>
+    </div>
+  );
+}
+
+/** Protection that keeps saturating fast — a capacity/output conversation. Same descriptive,
+ * provider-pointing voice as the overnight-adequacy card it sits beside. */
+function SaturationCard({ items }: { items: RapidSaturation[] }) {
+  return (
+    <div className="card">
+      <h3>Filling up fast</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        Protection coming back heavy after only a short time — it may not have the capacity for your output.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {items.map((it, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            {it.productName ? <b>{it.productName}</b> : 'A product'} came back heavy within <b>~{it.medianWearH}h</b>, {it.episodes} times.
+          </li>
+        ))}
+      </ul>
+      <div className="sub" style={{ marginTop: 8 }}>
+        Worth asking your provider about higher-capacity protection — or what's driving the volume.
+      </div>
+    </div>
+  );
+}
+
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
   // Evening/bedtime medications are the ones that can shape the night numbers — surface them
@@ -82,7 +182,8 @@ export function Report() {
   const prevCk = checkins[checkins.length - 2];
   const voids = voidsOf(entries);
   const toiletVoids = toiletVoidsOf(entries);
-  const leaks = leaksOf(entries);
+  const leaks = leaksOf(entries); // escaped onto clothing/bed — the containment-breach subset
+  const episodes = incontinenceEpisodesOf(entries); // all involuntary loss (escaped + into product)
   const nights = nightsOf(entries);
   const adequacy = productAdequacy(nights, products);
   const leaky = leakyProducts(adequacy);
@@ -90,6 +191,10 @@ export function Report() {
   const wettings = wettingsOf(entries);
   const drinks = drinksOf(entries);
   const rhythm = hourlyRhythm(entries);
+  const surges = surgePatterns(entries);
+  const clusters = voidClusterPatterns(entries);
+  const losses = unnoticedLosses(entries, products);
+  const saturation = rapidSaturation(entries, products);
   const has = (m: string) => enabledModules.includes(m);
 
   // A paste-able plain-text summary for a patient-portal message or a phone call with a
@@ -185,14 +290,17 @@ export function Report() {
       <Card title="Activity" onClick={() => openDetail('log')}>
         <div className="grid">
           <Metric n={toiletVoids.length} label="voids" />
-          <Metric n={leaks.length} label="leaks" />
-          {wettings.length > 0 && <Metric n={wettings.length} label="wettings" />}
+          <Metric n={episodes.length} label="leaks" />
           <Metric n={nights.length} label="nights" />
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
         </div>
       </Card>
 
       {rhythm.total >= 3 && <RhythmCard {...rhythm} />}
+      {surges.length > 0 && <SurgeCard patterns={surges} />}
+      {clusters.length > 0 && <ClusterCard patterns={clusters} units={units} />}
+      {losses.length > 0 && <UnnoticedLossCard losses={losses} units={units} />}
+      {saturation.length > 0 && <SaturationCard items={saturation} />}
 
       <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
         {lastCk ? (
@@ -251,12 +359,12 @@ export function Report() {
         <Card title="Protection" onClick={() => openDetail('changes')}>
           <div className="grid">
             <Metric n={changes.length} label="changes" />
-            <Metric n={wettings.length} label="wettings" />
+            <Metric n={wettings.length} label="into product" />
             <Metric n={absorbedMl > 0 ? fmtVol(absorbedMl, units) : '—'} label="absorbed" />
           </div>
           {wettings.length > 0 && (
             <div className="sub" style={{ marginTop: 10 }}>
-              {emptyingsPerDay.toFixed(1)} bladder emptyings / day counting wettings — vs{' '}
+              {emptyingsPerDay.toFixed(1)} bladder emptyings / day counting leaks into protection — vs{' '}
               {trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} from toilet voids alone.
             </div>
           )}

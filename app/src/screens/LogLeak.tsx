@@ -1,33 +1,40 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { awarenessReduced } from '../insights';
 import { Topbar, OptionGroup, WhenField } from '../ui';
 
 export function LogLeak() {
-  const { coreQuestions, gatewayQuestions, logLeak, navigate, traits, enabledModules } = useStore();
+  const { coreQuestions, gatewayQuestions, logLeak, navigate, enabledModules } = useStore();
   const usesProtection = enabledModules.includes('protection');
   const core = coreQuestions('leak');
-  // The awareness question only earns its place for reduced-sensation profiles.
-  const gateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
+  // "Did you feel it happen?" earns a permanent place here: a leak you didn't notice is exactly
+  // the kind of event this screen exists to capture, so it's offered to everyone — not gated to
+  // reduced-sensation profiles the way it is on the void screen.
+  const gateway = gatewayQuestions('leak');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [at, setAt] = useState<number | null>(null);
+  const [containment, setContainment] = useState('');
   const [showMore, setShowMore] = useState(false);
 
+  const contained = containment === 'Stayed in my protection';
   const set = (qid: string, v: string) => setAnswers((a) => ({ ...a, [qid]: v }));
   const done = () => {
-    logLeak(answers, at ?? undefined);
+    // Record containment on the answers too, so it shows in the log/CSV, and pass it through so
+    // the entry lands in the right shape (contained vs reached clothing).
+    logLeak(containment ? { ...answers, containment } : answers, at ?? undefined, { contained });
     navigate('home');
   };
 
   return (
     <div className="screen">
       <Topbar title="Log a leak" onBack={() => navigate('home')} />
-      <p className="lead">A leak is urine that got <b>out</b> — onto your clothing, skin, or the bed.</p>
+      <p className="lead">A leak is urine that came out when you didn't mean it to — any amount, even a few drops you barely noticed.</p>
+
       {usesProtection && (
-        <p className="note" style={{ marginTop: -6 }}>
-          If it stayed in your protection, that's a void —{' '}
-          <button onClick={() => navigate('void')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>log it as a void instead</button>.
-        </p>
+        <OptionGroup
+          question={{ id: 'containment', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Where did it end up?', options: ['Stayed in my protection', 'Reached clothing or bed'] }}
+          value={containment}
+          onChange={setContainment}
+        />
       )}
 
       {core.map((q) => (

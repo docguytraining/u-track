@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm } from './insights';
-import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
+import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, unnoticedLosses, rapidSaturation, minuteOfDayStr } from './insights';
+import type { VoidEntry, NightEntry, DrinkEntry, ChangeEntry, Product } from './store';
 
 const H = 3_600_000;
 const DAY = 86_400_000;
@@ -190,5 +190,195 @@ describe('formatters', () => {
   it('durationStr renders hours and minutes', () => {
     expect(durationStr(8 * H + 30 * 60_000)).toBe('8h 30m');
     expect(durationStr(9 * H)).toBe('9h 0m');
+  });
+});
+
+// High-volume episodes and their time-of-day patterns.
+const mv = (at: number, volumeMl: number): VoidEntry =>
+  ({ kind: 'void', id: `mv${at}`, at, where: 'toilet', leaked: false, volumeMl, size: null, productId: null, answers: {} });
+const pv = (at: number, size: string): VoidEntry =>
+  ({ kind: 'void', id: `pv${at}`, at, where: 'product', leaked: false, volumeMl: null, size, productId: null, answers: {} });
+
+describe('voidEffectiveMl', () => {
+  it('prefers a measured volume (not estimated)', () => {
+    expect(voidEffectiveMl(mv(noon, 320))).toEqual({ ml: 320, estimated: false });
+  });
+  it('estimates from reported size when unmeasured', () => {
+    expect(voidEffectiveMl(pv(noon, 'Large'))).toEqual({ ml: 300, estimated: true });
+  });
+  it('estimates a leak from its severity', () => {
+    expect(voidEffectiveMl(leak({ leakSeverity: 'Soaked' }))).toEqual({ ml: 250, estimated: true });
+  });
+  it('is null when there is no volume signal at all', () => {
+    expect(voidEffectiveMl(v(noon))).toBeNull();
+  });
+});
+
+describe('detectVolumeSurges', () => {
+  it('flags voids that clear the threshold within the window', () => {
+    const s = detectVolumeSurges([mv(noon, 250), mv(noon + 30 * 60_000, 250)]);
+    expect(s).toHaveLength(1);
+    expect(s[0]!.totalMl).toBe(500);
+    expect(s[0]!.voids).toBe(2);
+    expect(s[0]!.estimated).toBe(false);
+  });
+  it('does not flag volume that stays under the threshold', () => {
+    expect(detectVolumeSurges([mv(noon, 150), mv(noon + 30 * 60_000, 150)])).toHaveLength(0);
+  });
+  it('does not merge voids more than a window apart', () => {
+    // 250 + 250 but 3h apart → never 400 within any 2h window.
+    expect(detectVolumeSurges([mv(noon, 250), mv(noon + 3 * H, 250)])).toHaveLength(0);
+  });
+  it('uses size estimates and marks the episode estimated', () => {
+    const s = detectVolumeSurges([pv(noon, 'Large'), pv(noon + 20 * 60_000, 'Large')]); // 300+300
+    expect(s).toHaveLength(1);
+    expect(s[0]!.estimated).toBe(true);
+    expect(s[0]!.totalMl).toBe(600);
+  });
+});
+
+describe('surgePatterns', () => {
+  // Two 250 mL voids 30 min apart = one ~500 mL episode; repeat at the same clock time each day.
+  const burstDay = (dayOffset: number, base: number): VoidEntry[] => {
+    const t = base + dayOffset * DAY;
+    return [mv(t, 250), mv(t + 30 * 60_000, 250)];
+  };
+
+  it('calls out an episode recurring at the same time of day', () => {
+    const base = Date.UTC(2026, 7, 5, 5, 0); // ~early morning anchor
+    const entries = [0, 1, 2, 3, 4].flatMap((d) => burstDay(d, base));
+    const pats = surgePatterns(entries);
+    expect(pats).toHaveLength(1);
+    expect(pats[0]!.days).toBe(5);
+    expect(pats[0]!.periodDays).toBe(5);
+    expect(pats[0]!.surges).toHaveLength(5);
+  });
+
+  it('stays silent below the minimum logged days', () => {
+    const base = Date.UTC(2026, 7, 5, 5, 0);
+    const entries = [0, 1].flatMap((d) => burstDay(d, base)); // only 2 days
+    expect(surgePatterns(entries)).toEqual([]);
+  });
+
+  it('does not call a pattern when episodes scatter across the clock', () => {
+    // Three days, each with one episode, but at 5:00, 14:00, 20:00 — no shared time-of-day window.
+    const d0 = Date.UTC(2026, 7, 5, 5, 0);
+    const d1 = Date.UTC(2026, 7, 6, 14, 0);
+    const d2 = Date.UTC(2026, 7, 7, 20, 0);
+    const entries = [d0, d1, d2].flatMap((t) => [mv(t, 250), mv(t + 30 * 60_000, 250)]);
+    expect(surgePatterns(entries)).toEqual([]);
+  });
+});
+
+describe('minuteOfDayStr', () => {
+  it('formats minutes since midnight as a clock time', () => {
+    expect(minuteOfDayStr(0)).toMatch(/12:00/);      // midnight
+    expect(minuteOfDayStr(5 * 60 + 5)).toMatch(/5:05/); // 5:05
+  });
+});
+
+describe('incontinenceEpisodesOf (unified leak symptom)', () => {
+  it('includes every involuntary loss — into product or escaped — but not clean toilet voids', () => {
+    const entries = [
+      v(noon),                              // clean toilet void → excluded
+      mv(noon + H, 250),                    // measured toilet void → excluded
+      wetting(noon + 2 * H, {}),            // into product (contained) → included
+      leak({ leakSeverity: 'Damp' }),       // escaped onto clothing → included
+    ];
+    const eps = incontinenceEpisodesOf(entries);
+    expect(eps).toHaveLength(2);
+    expect(eps.every((e) => e.where === 'product' || e.leaked)).toBe(true);
+  });
+
+  it('estimates a "a few drops" leak volume', () => {
+    expect(voidEffectiveMl(leak({ leakSeverity: 'A few drops' }))).toEqual({ ml: 15, estimated: true });
+  });
+});
+
+describe('voidEffectiveMl — contained leak (severity, not escaped)', () => {
+  it('estimates a leak the product caught (where=product, leaked=false) from its severity', () => {
+    const contained: VoidEntry = { kind: 'void', id: 'c1', at: noon, where: 'product', leaked: false, volumeMl: null, size: null, productId: null, answers: { leakSeverity: 'Moderate' } };
+    expect(voidEffectiveMl(contained)).toEqual({ ml: 100, estimated: true });
+  });
+});
+
+describe('detectVoidClusters', () => {
+  it('flags 3+ emptyings within the hour window, counting voids and leaks alike', () => {
+    const t = noon;
+    const c = detectVoidClusters([mv(t, 120), mv(t + 20 * 60_000, 100), leak({ leakSeverity: 'Damp' })]);
+    // leak() is at `noon`, so all three fall inside the hour.
+    expect(c).toHaveLength(1);
+    expect(c[0]!.voids).toBe(3);
+    expect(c[0]!.measured).toBe(true);
+  });
+  it('does not flag fewer than the minimum, or emptyings spread beyond the window', () => {
+    expect(detectVoidClusters([mv(noon, 100), mv(noon + 20 * 60_000, 100)])).toHaveLength(0); // only 2
+    expect(detectVoidClusters([mv(noon, 100), mv(noon + 30 * 60_000, 100), mv(noon + 90 * 60_000, 100)])).toHaveLength(0); // spread > 1h
+  });
+});
+
+describe('voidClusterPatterns', () => {
+  const clusterDay = (d: number, base: number) => {
+    const t = base + d * DAY;
+    return [mv(t, 120), mv(t + 15 * 60_000, 110), mv(t + 35 * 60_000, 130)]; // 3 voids within ~35 min
+  };
+  it('calls out clustered voiding recurring at the same time of day', () => {
+    const base = Date.UTC(2026, 7, 5, 2, 0); // early-morning cluster
+    const entries = [0, 1, 2, 3].flatMap((d) => clusterDay(d, base));
+    const pats = voidClusterPatterns(entries);
+    expect(pats).toHaveLength(1);
+    expect(pats[0]!.days).toBe(4);
+    expect(pats[0]!.typicalVoids).toBe(3);
+    expect(pats[0]!.typicalMl).toBe(360);
+  });
+  it('stays silent below the minimum logged days', () => {
+    const base = Date.UTC(2026, 7, 5, 2, 0);
+    expect(voidClusterPatterns([0, 1].flatMap((d) => clusterDay(d, base)))).toEqual([]);
+  });
+});
+
+describe('unnoticedLosses', () => {
+  const change = (at: number, volumeMl: number | null, fullness: string, wearMs?: number): ChangeEntry =>
+    ({ kind: 'change', id: `ch${at}`, at, productId: 'p1', volumeMl, wearMs, answers: fullness ? { fullness } : {} });
+  const products = [{ id: 'p1', name: 'Night brief', dryGrams: 40 }];
+
+  it('flags a soaked change with little logged into it', () => {
+    // Saturated (~500 mL) over 8h, but only one dribble (~15) logged in the window.
+    const entries = [wetting(noon - 2 * H, {}), change(noon, null, 'Saturated', 8 * H)];
+    // wetting() has no size → 0 estimate; make it a real small size instead:
+    const withSize: VoidEntry[] = [{ kind: 'void', id: 'w1', at: noon - 2 * H, where: 'product', leaked: false, volumeMl: null, size: 'Dribble', productId: null, answers: {} }];
+    const losses = unnoticedLosses([...withSize, change(noon, null, 'Saturated', 8 * H)], products);
+    expect(losses).toHaveLength(1);
+    expect(losses[0]!.absorbedMl).toBe(500);
+    expect(losses[0]!.loggedMl).toBe(15);
+    expect(losses[0]!.shortfallMl).toBe(485);
+  });
+
+  it('does not flag when what was logged accounts for the volume', () => {
+    const logged: VoidEntry[] = [
+      { kind: 'void', id: 'w1', at: noon - 3 * H, where: 'product', leaked: false, volumeMl: null, size: 'Large', productId: null, answers: {} }, // 300
+      { kind: 'void', id: 'w2', at: noon - 1 * H, where: 'product', leaked: false, volumeMl: null, size: 'Moderate', productId: null, answers: {} }, // 150
+    ];
+    // Heavy (~300 mL) but 450 logged into it → nothing unnoticed.
+    expect(unnoticedLosses([...logged, change(noon, null, 'Heavy', 6 * H)], products)).toHaveLength(0);
+  });
+});
+
+describe('rapidSaturation', () => {
+  const ch = (at: number, fullness: string, wearMs: number): ChangeEntry =>
+    ({ kind: 'change', id: `s${at}`, at, productId: 'p1', volumeMl: null, wearMs, answers: { fullness } });
+  const products = [{ id: 'p1', name: 'Day guard', dryGrams: 20 }];
+
+  it('flags a product repeatedly saturated within a short wear', () => {
+    const entries = [ch(noon, 'Saturated', 1.5 * H), ch(noon + DAY, 'Heavy', 2 * H), ch(noon + 2 * DAY, 'Saturated', 1 * H)];
+    const r = rapidSaturation(entries, products);
+    expect(r).toHaveLength(1);
+    expect(r[0]!.episodes).toBe(3);
+    expect(r[0]!.productName).toBe('Day guard');
+  });
+
+  it('does not flag heavy changes worn a long time, or a one-off', () => {
+    expect(rapidSaturation([ch(noon, 'Saturated', 9 * H), ch(noon + DAY, 'Saturated', 8 * H)], products)).toHaveLength(0); // long wear
+    expect(rapidSaturation([ch(noon, 'Saturated', 1 * H)], products)).toHaveLength(0); // single episode
   });
 });
