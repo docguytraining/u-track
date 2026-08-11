@@ -8,6 +8,7 @@ import { LogLeak } from './screens/LogLeak';
 import { LogChange } from './screens/LogChange';
 import { LogDrink } from './screens/LogDrink';
 import { Morning } from './screens/Morning';
+import { Checkin } from './screens/Checkin';
 import { Report } from './screens/Report';
 import { Chart } from './screens/Chart';
 import { Detail } from './screens/Detail';
@@ -33,6 +34,7 @@ export function App() {
     change: <LogChange />,
     drink: <LogDrink />,
     morning: <Morning />,
+    checkin: <Checkin />,
     report: <Report />,
     chart: <Chart />,
     detail: <Detail />,

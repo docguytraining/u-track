@@ -23,7 +23,9 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 );
 
 export function Report() {
-  const { entries, enabledModules, drinkTypes, units, reports, products, navigate, openDetail, loadSample } = useStore();
+  const { entries, enabledModules, drinkTypes, units, reports, products, checkins, navigate, openDetail, loadSample } = useStore();
+  const lastCk = checkins[checkins.length - 1];
+  const prevCk = checkins[checkins.length - 2];
   const voids = voidsOf(entries);
   const toiletVoids = toiletVoidsOf(entries);
   const leaks = leaksOf(entries);
@@ -93,6 +95,24 @@ export function Report() {
           <Metric n={nights.length} label="nights" />
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
         </div>
+      </Card>
+
+      <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
+        {lastCk ? (
+          <>
+            <div className="grid">
+              <Metric n={`${lastCk.interference}/10`} label="interference with life" />
+              <Metric n={`${lastCk.bother}/10`} label="bother" />
+            </div>
+            {prevCk && (
+              <div className="sub" style={{ marginTop: 8 }}>
+                Last time: {prevCk.interference}/10 and {prevCk.bother}/10 · {checkins.length} check-ins so far.
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="sub">Add a weekly check-in — the trend in how much this affects your life is exactly what a doctor asks about.</div>
+        )}
       </Card>
 
       <Card title="Fluids" onClick={() => openDetail('drinks')}>

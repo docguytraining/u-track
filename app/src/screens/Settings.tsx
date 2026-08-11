@@ -13,7 +13,7 @@ const USAGE_OPTS: { value: ProductUsage; label: string }[] = [
 ];
 
 export function Settings() {
-  const { onboarded, enabledModules, traits, products, drinkTypes, units, entries, user, navigate, reset, loadSample, restoreBackup, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
+  const { onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins, user, navigate, reset, loadSample, restoreBackup, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
   const [restoreMsg, setRestoreMsg] = useState('');
   const today = new Date().toISOString().slice(0, 10);
 
@@ -191,7 +191,7 @@ export function Settings() {
           Export events (CSV)
         </button>
         <button className="block center" style={{ marginTop: 8 }} disabled={entries.length === 0}
-          onClick={() => download(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries }, new Date().toISOString()), null, 2), 'application/json')}>
+          onClick={() => download(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins }, new Date().toISOString()), null, 2), 'application/json')}>
           Download backup (JSON)
         </button>
         <label className="ghost block center" style={{ marginTop: 8, cursor: 'pointer', display: 'block', padding: '12px' }}>

@@ -20,7 +20,7 @@ import type { Units } from './units';
 import { cloudEnabled, onAuth, db, signInWithGoogle, signOutUser, completeMagicLink } from './firebase';
 
 /** Fields that persist to Firestore (everything except transient UI/auth state). */
-const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries'] as const;
+const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries', 'checkins'] as const;
 type Persisted = Pick<State, (typeof PERSIST_KEYS)[number]>;
 const pickPersisted = (o: State): Persisted =>
   Object.fromEntries(PERSIST_KEYS.map((k) => [k, o[k]])) as Persisted;
@@ -30,7 +30,18 @@ export interface AppUser {
   email: string | null;
 }
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
+export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'checkin' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
+
+/** A weekly quality-of-life check-in — the "how much is this affecting you" side of a
+ * clinical questionnaire, tracked over time. Two 0–10 scales, kept apart from `entries`. */
+export interface CheckIn {
+  id: string;
+  at: number;
+  /** Interference with day-to-day activities, 0 (not at all) – 10 (a great deal). */
+  interference: number;
+  /** How much it bothered you, 0–10. */
+  bother: number;
+}
 
 /**
  * A void — one bladder emptying, the umbrella for everything. Two orthogonal facts
@@ -139,6 +150,7 @@ interface State {
   /** Display/input units for volumes. Storage is always ml. */
   units: Units;
   entries: LogEntry[];
+  checkins: CheckIn[];
   measuredDay: boolean;
   screen: Screen;
   /** Which drill-down the detail screen is showing. */
@@ -159,6 +171,7 @@ interface Store extends State {
   logLeak: (answers: Record<string, string>, at?: number) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
+  logCheckin: (c: { interference: number; bother: number }) => void;
   /** Remove a logged entry by id — for something recorded by accident. */
   deleteEntry: (id: string) => void;
   removeDrinkType: (name: string) => void;
@@ -197,6 +210,7 @@ const initial: State = {
   drinkTypes: DEFAULT_DRINK_NAMES,
   units: 'oz', // freedom units by default; toggle in Settings
   entries: [],
+  checkins: [],
   measuredDay: false,
   screen: 'onboarding',
   detail: null,
@@ -334,6 +348,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
+      logCheckin: ({ interference, bother }) =>
+        setState((s) => ({ ...s, checkins: [...s.checkins, { id: id(), at: Date.now(), interference, bother }] })),
       deleteEntry: (eid) => setState((s) => ({ ...s, entries: s.entries.filter((e) => e.id !== eid) })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
       addDrinkType: (name) => setState((s) => (s.drinkTypes.includes(name) ? s : { ...s, drinkTypes: [...s.drinkTypes, name] })),
