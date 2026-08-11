@@ -148,6 +148,9 @@ a.link { color: var(--accent); cursor: pointer; }
 .rhythm-legend .key { display: inline-flex; align-items: center; gap: 5px; }
 .rhythm-legend .swatch { width: 10px; height: 10px; border-radius: 3px; }
 
+/* Check-in trajectory sparkline — two lines over time, no verdict. */
+.spark { width: 100%; height: 56px; display: block; margin-top: 10px; overflow: visible; }
+
 /* Print: a clean, light, clinician-friendly chart (the takeaway artifact). */
 .print-only { display: none; }
 @media print {
