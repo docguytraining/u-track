@@ -155,6 +155,8 @@ interface Store extends State {
   logLeak: (answers: Record<string, string>, at?: number) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
+  /** Remove a logged entry by id — for something recorded by accident. */
+  deleteEntry: (id: string) => void;
   removeDrinkType: (name: string) => void;
   addDrinkType: (name: string) => void;
   setUnits: (u: Units) => void;
@@ -326,6 +328,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
+      deleteEntry: (eid) => setState((s) => ({ ...s, entries: s.entries.filter((e) => e.id !== eid) })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
       addDrinkType: (name) => setState((s) => (s.drinkTypes.includes(name) ? s : { ...s, drinkTypes: [...s.drinkTypes, name] })),
       setUnits: (u) => setState((s) => ({ ...s, units: u })),
