@@ -136,6 +136,18 @@ input.numinput:focus { outline: none; border-color: var(--accent); }
 .hr { height: 1px; background: var(--line); border: 0; margin: 4px 0; }
 a.link { color: var(--accent); cursor: pointer; }
 
+/* Daily-rhythm chart: 24 hour-of-day columns, voids under leaks, purely descriptive. */
+.rhythm { display: flex; align-items: flex-end; gap: 2px; height: 96px; margin-top: 6px; }
+.rhythm .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.rhythm .seg { width: 100%; border-radius: 2px 2px 0 0; min-height: 0; }
+.rhythm .seg.void { background: var(--accent); }
+.rhythm .seg.leak { background: var(--warn); }
+.rhythm .col.empty { background: var(--line); align-self: flex-end; height: 2px; border-radius: 2px; }
+.rhythm-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.rhythm-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.rhythm-legend .key { display: inline-flex; align-items: center; gap: 5px; }
+.rhythm-legend .swatch { width: 10px; height: 10px; border-radius: 3px; }
+
 /* Print: a clean, light, clinician-friendly chart (the takeaway artifact). */
 .print-only { display: none; }
 @media print {

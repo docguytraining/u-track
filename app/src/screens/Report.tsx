@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, type HourBucket } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 
@@ -22,6 +22,48 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
   <div><div className="stat"><span className="n">{n}</span></div><div className="sub">{label}</div></div>
 );
 
+// 13 → "1pm", 0 → "12am" — for naming the busiest hour in plain language.
+const fmtHour = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? 'am' : 'pm'}`;
+
+/** A 24-hour clock of when voids and leaks happen, folded across every logged day. It answers
+ * "when does it happen?" — the pattern a clinician asks about — and nothing more. No target,
+ * no judgment: it just draws the shape of the day. */
+function RhythmCard({ buckets, days, total, peak }: { buckets: HourBucket[]; days: number; total: number; peak: HourBucket | null }) {
+  const max = Math.max(1, ...buckets.map((b) => b.voids + b.leaks));
+  const anyLeak = buckets.some((b) => b.leaks > 0);
+  return (
+    <div className="card">
+      <h3>Daily rhythm</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        When voids and leaks tend to happen, across {days} day{days === 1 ? '' : 's'}.
+      </div>
+      <div className="rhythm" aria-hidden="true">
+        {buckets.map((b) => {
+          const sum = b.voids + b.leaks;
+          if (sum === 0) return <div className="col empty" key={b.hour} />;
+          return (
+            <div className="col" key={b.hour} title={`${fmtHour(b.hour)}: ${b.voids} void${b.voids === 1 ? '' : 's'}${b.leaks ? `, ${b.leaks} leak${b.leaks === 1 ? '' : 's'}` : ''}`}>
+              {b.leaks > 0 && <div className="seg leak" style={{ height: `${(b.leaks / max) * 100}%` }} />}
+              {b.voids > 0 && <div className="seg void" style={{ height: `${(b.voids / max) * 100}%` }} />}
+            </div>
+          );
+        })}
+      </div>
+      <div className="rhythm-axis"><span>12am</span><span>6am</span><span>noon</span><span>6pm</span><span>12am</span></div>
+      <div className="rhythm-legend">
+        <span className="key"><span className="swatch" style={{ background: 'var(--accent)' }} />voids</span>
+        {anyLeak && <span className="key"><span className="swatch" style={{ background: 'var(--warn)' }} />leaks</span>}
+      </div>
+      {peak && total >= 5 && (
+        <div className="sub" style={{ marginTop: 10 }}>
+          Busiest around {fmtHour(peak.hour)}–{fmtHour((peak.hour + 1) % 24)}.
+          {peak.hour >= 22 || peak.hour < 6 ? ' Overnight clustering is worth mentioning to your provider.' : ''}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
   // Evening/bedtime medications are the ones that can shape the night numbers — surface them
@@ -38,6 +80,7 @@ export function Report() {
   const changes = changesOf(entries);
   const wettings = wettingsOf(entries);
   const drinks = drinksOf(entries);
+  const rhythm = hourlyRhythm(entries);
   const has = (m: string) => enabledModules.includes(m);
 
   const intakeMl = drinks.reduce((s, d) => s + (d.volumeMl ?? 0), 0);
@@ -99,6 +142,8 @@ export function Report() {
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
         </div>
       </Card>
+
+      {rhythm.total >= 3 && <RhythmCard {...rhythm} />}
 
       <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
         {lastCk ? (
