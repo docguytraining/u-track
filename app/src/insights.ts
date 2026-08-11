@@ -290,6 +290,48 @@ export function detectVolumeSurges(
   return surges;
 }
 
+/** The rolling period the pattern detectors reason over: the window of up to `periodDays`
+ * ending on the most recent logged void, and how many distinct days in it carried data. Null
+ * when there isn't enough logged history (fewer than `minDays`) to claim a pattern. */
+function rollingPeriod(
+  entries: readonly LogEntry[],
+  periodDays: number,
+  minDays: number,
+): { cutoff: number; periodDayCount: number } | null {
+  const voids = voidsOf(entries);
+  if (!voids.length) return null;
+  const anchor = Math.max(...voids.map((v) => v.at));
+  const cutoff = anchor - (periodDays - 1) * DAY_MS;
+  const periodDayCount = new Set(voids.filter((v) => v.at >= cutoff).map((v) => dayKeyOf(v.at))).size;
+  return periodDayCount < minDays ? null : { cutoff, periodDayCount };
+}
+
+/** Group timed events that recur at the same clock time (within ±toleranceMin, wrapping across
+ * midnight), keeping only windows that appear on at least half the period's logged days.
+ * Strongest (most days) first; non-overlapping. Shared by the surge and cluster detectors. */
+function recurringByTimeOfDay<T extends { at: number }>(
+  items: readonly T[],
+  periodDayCount: number,
+  toleranceMin: number,
+): { minuteOfDay: number; days: number; members: T[] }[] {
+  const pts = items.map((it) => ({ it, min: minuteOfDayOf(it.at), day: dayKeyOf(it.at) }));
+  const required = Math.ceil(periodDayCount / 2);
+  const candidates = pts.map((p) => {
+    const members = pts.filter((o) => circadianGap(p.min, o.min) <= toleranceMin);
+    return { centre: p.min, members, days: new Set(members.map((m) => m.day)).size };
+  });
+  candidates.sort((a, b) => b.days - a.days || b.members.length - a.members.length);
+  const out: { minuteOfDay: number; days: number; members: T[] }[] = [];
+  const claimed = new Set<T>();
+  for (const c of candidates) {
+    if (c.days < required) continue;
+    if (c.members.some((m) => claimed.has(m.it))) continue;
+    c.members.forEach((m) => claimed.add(m.it));
+    out.push({ minuteOfDay: c.centre, days: c.days, members: c.members.map((m) => m.it) });
+  }
+  return out;
+}
+
 /** Recurring high-volume episodes at a consistent time of day, over a rolling period (default
  * up to 14 days, at least 3 logged days). A window is a "pattern" when it holds an episode on
  * at least half the logged days in the period. Strongest (most days) first; non-overlapping. */
@@ -300,40 +342,106 @@ export function surgePatterns(
   const { windowMs, thresholdMl, toleranceMin = SURGE_TOLERANCE_MIN, periodDays = SURGE_PERIOD_DAYS, minDays = SURGE_MIN_DAYS } = opts;
   const all = detectVolumeSurges(entries, { windowMs, thresholdMl });
   if (!all.length) return [];
+  const period = rollingPeriod(entries, periodDays, minDays);
+  if (!period) return [];
+  const inWindow = all.filter((s) => s.at >= period.cutoff);
+  return recurringByTimeOfDay(inWindow, period.periodDayCount, toleranceMin).map((g) => ({
+    minuteOfDay: g.minuteOfDay,
+    days: g.days,
+    periodDays: period.periodDayCount,
+    estimated: g.members.some((m) => m.estimated),
+    surges: [...g.members].sort((a, b) => b.at - a.at),
+  }));
+}
 
-  // Rolling period: the window ending on the most recent logged void, spanning up to periodDays.
-  const voids = voidsOf(entries);
-  const anchor = Math.max(...voids.map((v) => v.at));
-  const cutoff = anchor - (periodDays - 1) * DAY_MS;
-  const periodDayCount = new Set(voids.filter((v) => v.at >= cutoff).map((v) => dayKeyOf(v.at))).size;
-  if (periodDayCount < minDays) return [];
-  const required = Math.ceil(periodDayCount / 2);
+export const CLUSTER_WINDOW_MS = 60 * 60_000; // "close together" = within an hour
+export const CLUSTER_MIN_VOIDS = 3; // three signals in that hour is the clustering threshold
 
-  const inWindow = all.filter((s) => s.at >= cutoff).map((s) => ({ s, min: minuteOfDayOf(s.at), day: dayKeyOf(s.at) }));
+/** A run of bladder emptyings packed close together — voids AND leaks alike, since the point
+ * is the *repetition*: going (or leaking) again and again in a short span. Whether the volumes
+ * are large or small is what tells the two clinical stories apart — large means you can't hold
+ * the output, small means you may not be emptying fully or can't hold even a little. */
+export interface VoidCluster {
+  at: number;
+  endAt: number;
+  /** How many emptyings fell in the window. */
+  voids: number;
+  /** Summed volume across them (measured + estimated), mL. */
+  totalMl: number;
+  /** True if any component volume was estimated rather than measured. */
+  estimated: boolean;
+  /** True if at least one emptying carried a real measured volume. */
+  measured: boolean;
+}
 
-  // Centre a candidate window on each episode's clock time; keep those recurring on ≥ required
-  // distinct days, then greedily take the strongest non-overlapping clusters.
-  const candidates = inWindow.map((c) => {
-    const members = inWindow.filter((o) => circadianGap(c.min, o.min) <= toleranceMin);
-    return { centre: c.min, members, days: new Set(members.map((m) => m.day)).size };
-  });
-  candidates.sort((a, b) => b.days - a.days || b.members.length - a.members.length);
-
-  const patterns: SurgePattern[] = [];
-  const claimed = new Set<VolumeSurge>();
-  for (const c of candidates) {
-    if (c.days < required) continue;
-    if (c.members.some((m) => claimed.has(m.s))) continue;
-    c.members.forEach((m) => claimed.add(m.s));
-    patterns.push({
-      minuteOfDay: c.centre,
-      days: c.days,
-      periodDays: periodDayCount,
-      estimated: c.members.some((m) => m.s.estimated),
-      surges: c.members.map((m) => m.s).sort((a, b) => b.at - a.at),
-    });
+/** Find runs of at least `minVoids` bladder emptyings within a short window (default 1 hour).
+ * Non-overlapping — once a run is taken, scanning resumes after it. */
+export function detectVoidClusters(
+  entries: readonly LogEntry[],
+  { windowMs = CLUSTER_WINDOW_MS, minVoids = CLUSTER_MIN_VOIDS }: { windowMs?: number; minVoids?: number } = {},
+): VoidCluster[] {
+  const evs = voidsOf(entries)
+    .map((v) => { const e = voidEffectiveMl(v); return { at: v.at, ml: e?.ml ?? 0, estimated: e?.estimated ?? false, measured: !!e && !e.estimated }; })
+    .sort((a, b) => a.at - b.at);
+  const clusters: VoidCluster[] = [];
+  let i = 0;
+  while (i < evs.length) {
+    let j = i;
+    while (j < evs.length && evs[j]!.at - evs[i]!.at <= windowMs) j++;
+    if (j - i >= minVoids) {
+      const slice = evs.slice(i, j);
+      clusters.push({
+        at: evs[i]!.at, endAt: evs[j - 1]!.at, voids: j - i,
+        totalMl: Math.round(slice.reduce((s, e) => s + e.ml, 0)),
+        estimated: slice.some((e) => e.estimated),
+        measured: slice.some((e) => e.measured),
+      });
+      i = j; // non-overlapping
+    } else {
+      i++;
+    }
   }
-  return patterns;
+  return clusters;
+}
+
+/** A recurring cluster of emptyings at a consistent time of day. */
+export interface ClusterPattern {
+  minuteOfDay: number;
+  days: number;
+  periodDays: number;
+  /** Typical number of emptyings per cluster in this window. */
+  typicalVoids: number;
+  /** Typical summed volume per cluster when measured, else null. */
+  typicalMl: number | null;
+  estimated: boolean;
+  clusters: VoidCluster[];
+}
+
+/** Clustered voiding that recurs at the same time of day — the "why am I getting the signal
+ * three times and still not empty / still can't hold it" pattern. Same rolling-period and
+ * half-the-days rule as the surge detector. */
+export function voidClusterPatterns(
+  entries: readonly LogEntry[],
+  opts: { windowMs?: number; minVoids?: number; toleranceMin?: number; periodDays?: number; minDays?: number } = {},
+): ClusterPattern[] {
+  const { windowMs, minVoids, toleranceMin = SURGE_TOLERANCE_MIN, periodDays = SURGE_PERIOD_DAYS, minDays = SURGE_MIN_DAYS } = opts;
+  const all = detectVoidClusters(entries, { windowMs, minVoids });
+  if (!all.length) return [];
+  const period = rollingPeriod(entries, periodDays, minDays);
+  if (!period) return [];
+  const inWindow = all.filter((c) => c.at >= period.cutoff);
+  return recurringByTimeOfDay(inWindow, period.periodDayCount, toleranceMin).map((g) => {
+    const measured = g.members.filter((c) => c.measured);
+    return {
+      minuteOfDay: g.minuteOfDay,
+      days: g.days,
+      periodDays: period.periodDayCount,
+      typicalVoids: Math.round(g.members.reduce((s, c) => s + c.voids, 0) / g.members.length),
+      typicalMl: measured.length ? Math.round(measured.reduce((s, c) => s + c.totalMl, 0) / measured.length) : null,
+      estimated: g.members.some((c) => c.estimated),
+      clusters: [...g.members].sort((a, b) => b.at - a.at),
+    };
+  });
 }
 
 /** A clock minute-of-day as a readable time, e.g. 305 → "5:05 AM". */

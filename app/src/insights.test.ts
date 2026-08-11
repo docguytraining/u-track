@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, minuteOfDayStr } from './insights';
+import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, minuteOfDayStr } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -299,5 +299,40 @@ describe('voidEffectiveMl — contained leak (severity, not escaped)', () => {
   it('estimates a leak the product caught (where=product, leaked=false) from its severity', () => {
     const contained: VoidEntry = { kind: 'void', id: 'c1', at: noon, where: 'product', leaked: false, volumeMl: null, size: null, productId: null, answers: { leakSeverity: 'Moderate' } };
     expect(voidEffectiveMl(contained)).toEqual({ ml: 100, estimated: true });
+  });
+});
+
+describe('detectVoidClusters', () => {
+  it('flags 3+ emptyings within the hour window, counting voids and leaks alike', () => {
+    const t = noon;
+    const c = detectVoidClusters([mv(t, 120), mv(t + 20 * 60_000, 100), leak({ leakSeverity: 'Damp' })]);
+    // leak() is at `noon`, so all three fall inside the hour.
+    expect(c).toHaveLength(1);
+    expect(c[0]!.voids).toBe(3);
+    expect(c[0]!.measured).toBe(true);
+  });
+  it('does not flag fewer than the minimum, or emptyings spread beyond the window', () => {
+    expect(detectVoidClusters([mv(noon, 100), mv(noon + 20 * 60_000, 100)])).toHaveLength(0); // only 2
+    expect(detectVoidClusters([mv(noon, 100), mv(noon + 30 * 60_000, 100), mv(noon + 90 * 60_000, 100)])).toHaveLength(0); // spread > 1h
+  });
+});
+
+describe('voidClusterPatterns', () => {
+  const clusterDay = (d: number, base: number) => {
+    const t = base + d * DAY;
+    return [mv(t, 120), mv(t + 15 * 60_000, 110), mv(t + 35 * 60_000, 130)]; // 3 voids within ~35 min
+  };
+  it('calls out clustered voiding recurring at the same time of day', () => {
+    const base = Date.UTC(2026, 7, 5, 2, 0); // early-morning cluster
+    const entries = [0, 1, 2, 3].flatMap((d) => clusterDay(d, base));
+    const pats = voidClusterPatterns(entries);
+    expect(pats).toHaveLength(1);
+    expect(pats[0]!.days).toBe(4);
+    expect(pats[0]!.typicalVoids).toBe(3);
+    expect(pats[0]!.typicalMl).toBe(360);
+  });
+  it('stays silent below the minimum logged days', () => {
+    const base = Date.UTC(2026, 7, 5, 2, 0);
+    expect(voidClusterPatterns([0, 1].flatMap((d) => clusterDay(d, base)))).toEqual([]);
   });
 });

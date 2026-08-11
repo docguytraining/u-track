@@ -3,9 +3,9 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, voidClusterPatterns, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern, type ClusterPattern } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
-import { fmtVol } from '../units';
+import { fmtVol, type Units } from '../units';
 import { Icon } from '../icons';
 
 function Card({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
@@ -101,6 +101,31 @@ function SurgeCard({ patterns }: { patterns: SurgePattern[] }) {
   );
 }
 
+/** Clustered voiding at a consistent time of day — repeated emptyings close together. The
+ * volumes carry the clinical distinction (a lot = can't hold; a little = not emptying / can't
+ * hold even a little), so we show them when measured and let the provider read it. */
+function ClusterCard({ patterns, units }: { patterns: ClusterPattern[]; units: Units }) {
+  return (
+    <div className="card">
+      <h3>Clustered voiding</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        Several emptyings packed close together, recurring at the same time of day — going again and again in a short span.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {patterns.map((p, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            Around <b>{minuteOfDayStr(p.minuteOfDay)}</b> — about <b>{p.typicalVoids}</b> emptyings within an hour, on <b>{p.days}</b> of {p.periodDays} tracked days
+            {p.typicalMl != null ? ` (~${fmtVol(p.typicalMl, units)} in that hour)` : ''}.
+          </li>
+        ))}
+      </ul>
+      <div className="sub" style={{ marginTop: 8 }}>
+        Trips this close together can mean the bladder isn't emptying fully or isn't holding — worth mentioning to your provider.
+      </div>
+    </div>
+  );
+}
+
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
   // Evening/bedtime medications are the ones that can shape the night numbers — surface them
@@ -120,6 +145,7 @@ export function Report() {
   const drinks = drinksOf(entries);
   const rhythm = hourlyRhythm(entries);
   const surges = surgePatterns(entries);
+  const clusters = voidClusterPatterns(entries);
   const has = (m: string) => enabledModules.includes(m);
 
   // A paste-able plain-text summary for a patient-portal message or a phone call with a
@@ -223,6 +249,7 @@ export function Report() {
 
       {rhythm.total >= 3 && <RhythmCard {...rhythm} />}
       {surges.length > 0 && <SurgeCard patterns={surges} />}
+      {clusters.length > 0 && <ClusterCard patterns={clusters} units={units} />}
 
       <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
         {lastCk ? (
