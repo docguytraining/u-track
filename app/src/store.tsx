@@ -15,7 +15,7 @@ import {
   type MeasuredDayReport,
   type TrendReport,
 } from '@core';
-import { MODULES, DEFAULT_DRY_WEIGHTS, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
+import { MODULES, DEFAULT_DRY_WEIGHTS, USAGE_BY_TIER, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
 import type { Units } from './units';
 import { cloudEnabled, onAuth, db, signInWithGoogle, signOutUser, completeMagicLink } from './firebase';
 
@@ -116,6 +116,8 @@ export function normalizeEntries(raw: readonly unknown[]): LogEntry[] {
   return out;
 }
 
+/** When a product is normally used — scopes the "which product?" pickers by context. */
+export type ProductUsage = 'day' | 'night' | 'both';
 /** A protection product in the user's library — a trait, set rarely (spec §6.5). */
 export interface Product {
   id: string;
@@ -123,6 +125,8 @@ export interface Product {
   dryGrams: number;
   /** The absorbency tier it was created from (for dedup + default weight). */
   tier?: string;
+  /** Daytime / overnight / both — set by the user, defaults from the tier. */
+  usage?: ProductUsage;
 }
 
 interface State {
@@ -162,8 +166,8 @@ interface Store extends State {
   setUnits: (u: Units) => void;
   logNight: (n: Omit<NightEntry, 'kind' | 'id' | 'nightId'>) => void;
   setMeasuredDay: (on: boolean) => void;
-  addProduct: (name: string, dryGrams: number, tier?: string) => void;
-  updateProduct: (id: string, patch: { name?: string; dryGrams?: number }) => void;
+  addProduct: (name: string, dryGrams: number, tier?: string, usage?: ProductUsage) => void;
+  updateProduct: (id: string, patch: { name?: string; dryGrams?: number; usage?: ProductUsage }) => void;
   removeProduct: (id: string) => void;
   loadSample: () => void;
   rerunOnboarding: () => void;
@@ -313,7 +317,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const created: Product[] = [];
           for (const tier of productTiers) {
             if (!have.has(tier)) {
-              created.push({ id: id(), name: tier, dryGrams: DEFAULT_DRY_WEIGHTS[tier] ?? 0, tier });
+              created.push({ id: id(), name: tier, dryGrams: DEFAULT_DRY_WEIGHTS[tier] ?? 0, tier, usage: USAGE_BY_TIER[tier] ?? 'both' });
               have.add(tier);
             }
           }
@@ -344,8 +348,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...s, entries: [...s.entries, night, ...firstVoid] };
         }),
       setMeasuredDay: (on) => setState((s) => ({ ...s, measuredDay: on })),
-      addProduct: (name, dryGrams, tier) =>
-        setState((s) => ({ ...s, products: [...s.products, { id: id(), name, dryGrams, tier }] })),
+      addProduct: (name, dryGrams, tier, usage) =>
+        setState((s) => ({ ...s, products: [...s.products, { id: id(), name, dryGrams, tier, usage }] })),
       updateProduct: (pid, patch) =>
         setState((s) => ({ ...s, products: s.products.map((p) => (p.id === pid ? { ...p, ...patch } : p)) })),
       removeProduct: (pid) => setState((s) => ({ ...s, products: s.products.filter((p) => p.id !== pid) })),

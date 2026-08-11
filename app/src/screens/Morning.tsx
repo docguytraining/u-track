@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Topbar, OptionGroup, VolumeField } from '../ui';
-import { toiletVoidsOf, timeStr, awarenessReduced } from '../insights';
+import { toiletVoidsOf, timeStr, awarenessReduced, productsForContext } from '../insights';
 
 const BED: [string, number][] = [
   ['9pm', 21], ['10pm', 22], ['11pm', 23], ['12am', 0], ['1am', 1], ['2am', 2], ['3am', 3],
@@ -33,7 +33,14 @@ export function Morning() {
   const [firstVoidMl, setFirstVoidMl] = useState<number | null>(null);
   const [firstDest, setFirstDest] = useState(''); // where the first void after rising went
   const [overnightMl, setOvernightMl] = useState<number | null>(null); // the weighed overnight product
+  const [overnightProductId, setOvernightProductId] = useState(''); // '' = unset, 'none' = wore nothing
   const [showMore, setShowMore] = useState(false);
+
+  // Which product to offer overnight — the user's own, scoped to their overnight ones.
+  const nightProducts = productsForContext(products, 'night');
+  // Pre-select when there's only one, so the common night is zero taps.
+  const overnightChoice = overnightProductId || (nightProducts.length === 1 ? nightProducts[0]!.id : '');
+  const selectedNightProduct = overnightChoice && overnightChoice !== 'none' ? overnightChoice : null;
 
   const bedTs = bedtimeFor(bedHour);
   const riseTs = risingFor(riseHour);
@@ -55,20 +62,25 @@ export function Morning() {
   // Non-protection people always void in the toilet; protection users pick where.
   const firstToilet = !usesProtection || firstDest === 'Toilet';
 
+  const pid = selectedNightProduct ?? products[0]?.id ?? null;
   const set = (q: string, v: string) => setAnswers((a) => ({ ...a, [q]: v }));
   const save = () => {
     // The protection you woke up in, weighed → a change near rising. Its fluid (including a
     // first void that went *into* it) lives here, so it's never also counted as a volume.
     if (wet && usesProtection && overnightMl != null) {
-      logChange({ productId: products[0]?.id ?? null, volumeMl: overnightMl, answers: {}, at: riseTs + 5 * 60_000 });
+      logChange({ productId: pid, volumeMl: overnightMl, answers: {}, at: riseTs + 5 * 60_000 });
     }
     // A first void that went into the product (after getting up) is a volumeless product
     // void — its fluid is in the weight above.
     if (usesProtection && firstDest === 'Into protection') {
-      logVoid({ where: 'product', productId: products[0]?.id ?? null, answers: { firstMorning: 'yes' }, at: riseTs + 10 * 60_000 });
+      logVoid({ where: 'product', productId: pid, answers: { firstMorning: 'yes' }, at: riseTs + 10 * 60_000 });
     }
     // The measured toilet first-morning void rides through logNight so NUV/NPi pick it up.
-    logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: firstToilet ? firstVoidMl : null, answers: { nightVoids: total, ...answers } });
+    // Record which product was worn — the raw material for the product-vs-leaks adequacy view.
+    logNight({
+      bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: firstToilet ? firstVoidMl : null,
+      answers: { nightVoids: total, ...(selectedNightProduct ? { protectionProductId: selectedNightProduct } : overnightChoice === 'none' ? { protectionProductId: 'none' } : {}), ...answers },
+    });
     navigate('home');
   };
 
@@ -132,6 +144,20 @@ export function Morning() {
       )}
 
       <div className="hr" />
+
+      {/* Which of your own overnight products you wore — the raw material for the
+          product-vs-leaks trend. One product? It's pre-selected, so this is zero taps. */}
+      {usesProtection && nightProducts.length > 0 && (
+        <div className="field">
+          <label>Which protection did you wear overnight?</label>
+          <div className="chips">
+            {nightProducts.map((p) => (
+              <button key={p.id} className={overnightChoice === p.id ? 'selected' : ''} onClick={() => setOvernightProductId(p.id)}>{p.name}</button>
+            ))}
+            <button className={overnightChoice === 'none' ? 'selected' : ''} onClick={() => setOvernightProductId('none')}>None</button>
+          </div>
+        </div>
+      )}
 
       {/* Overnight output: the protection you woke up in, weighed → a change. This is a
           SEPARATE thing from the first-morning void, which happens after you get up. */}

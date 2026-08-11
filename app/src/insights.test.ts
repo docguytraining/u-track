@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
-import type { VoidEntry, NightEntry, DrinkEntry } from './store';
+import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
+import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
 
 const H = 3_600_000;
 const DAY = 86_400_000;
@@ -107,6 +107,15 @@ describe('awarenessReduced (the awareness-question gate)', () => {
     expect(awarenessReduced({ fillingAwareness: 'Delayed' })).toBe(true);
     expect(awarenessReduced({ warningTime: 'Almost none' })).toBe(true);
     expect(awarenessReduced({ leakNoticing: 'Usually find out after' })).toBe(true);
+  });
+});
+
+describe('productsForContext', () => {
+  const P = (id: string, usage?: 'day' | 'night' | 'both'): Product => ({ id, name: id, dryGrams: 50, usage });
+  it('includes the matching context, plus both/untagged; excludes the other', () => {
+    const products = [P('d', 'day'), P('n', 'night'), P('b', 'both'), P('u')];
+    expect(productsForContext(products, 'night').map((p) => p.id)).toEqual(['n', 'b', 'u']);
+    expect(productsForContext(products, 'day').map((p) => p.id)).toEqual(['d', 'b', 'u']);
   });
 });
 
