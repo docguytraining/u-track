@@ -7,14 +7,14 @@ import {
   sleepDurationMs,
   type VoidEvent,
 } from '@core';
-import { useStore } from '../store';
+import { useStore, type LogEntry } from '../store';
 import { Topbar } from '../ui';
 import { voidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, timeStr, dateStr, durationStr, dayKey } from '../insights';
 import { fmtVol } from '../units';
 import { Icon, type IconName } from '../icons';
 
-/** A log line. When `onDelete` is given, a ✕ reveals a two-tap confirm — deletes are
- * destructive and there's no undo, so we never fire on a single tap. */
+/** A log line. When `onDelete` is given, a ✕ reveals a two-tap confirm — and the delete
+ * is undoable afterwards, so removing something never feels like a cliff edge. */
 const Row = ({ left, right, onDelete }: { left: React.ReactNode; right: string; onDelete?: () => void }) => {
   const [confirm, setConfirm] = useState(false);
   return (
@@ -48,7 +48,11 @@ const ans = (a: Record<string, string>, keys: string[]) =>
 
 
 export function Detail() {
-  const { detail, entries, navigate, products, units, deleteEntry } = useStore();
+  const { detail, entries, navigate, products, units, deleteEntry, restoreEntry } = useStore();
+  // Delete has no confirmation dialog — instead it's reversible: keep the last removed
+  // entry so a single tap puts it back. Deleting health data should never feel one-way.
+  const [undo, setUndo] = useState<LogEntry | null>(null);
+  const del = (e: LogEntry) => { setUndo(e); deleteEntry(e.id); };
   const voids = voidsOf(entries);
   const leaks = leaksOf(entries);
   const nights = nightsOf(entries);
@@ -78,7 +82,14 @@ export function Detail() {
     body = (
       <div className="list">
         {sorted.length > 0 && <p className="note">Tap ✕ to remove anything logged by accident.</p>}
-        {sorted.length === 0 && <p className="note">Nothing logged yet.</p>}
+        {sorted.length === 0 && !undo && <p className="note">Nothing logged yet.</p>}
+        {undo && (
+          <div className="logline" style={{ borderLeft: '3px solid var(--accent)', paddingLeft: 10 }}>
+            <span>Deleted.</span>
+            <span className="spacer" />
+            <button className="ghost" style={{ minHeight: 32, padding: '2px 12px', color: 'var(--accent)' }} onClick={() => { restoreEntry(undo); setUndo(null); }}>Undo</button>
+          </div>
+        )}
         {sorted.map((e) => {
           // Every entry kind renders here — the diary log mixes them all. Missing a kind
           // (e.g. treating a drink, which has no `answers`, as a night) throws and blanks
@@ -96,14 +107,14 @@ export function Detail() {
               const a = ans(e.answers, ['urgency', 'leakSeverity', 'leakTrigger', 'stream']);
               if (a !== '—') parts.push(a);
               if (e.leaked) parts.push('leaked');
-              return <Row key={e.id} left={<><Stamp icon={icon} at={e.at} />{label}</>} right={parts.join(' · ') || '—'} onDelete={() => deleteEntry(e.id)} />;
+              return <Row key={e.id} left={<><Stamp icon={icon} at={e.at} />{label}</>} right={parts.join(' · ') || '—'} onDelete={() => del(e)} />;
             }
             case 'change':
-              return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} onDelete={() => deleteEntry(e.id)} />;
+              return <Row key={e.id} left={<><Stamp icon="change" at={e.at} /> · {productName(e.productId)}</>} right={e.volumeMl != null ? vol(e.volumeMl) : ans(e.answers, ['fullness'])} onDelete={() => del(e)} />;
             case 'drink':
-              return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} onDelete={() => deleteEntry(e.id)} />;
+              return <Row key={e.id} left={<><Stamp icon="drink" at={e.at} /> · {e.type}</>} right={vol(e.volumeMl)} onDelete={() => del(e)} />;
             case 'night':
-              return <Row key={e.id} left={<><Icon name="morning" size={16} /> {dateStr(e.bedtime)}</>} right={ans(e.answers, ['howWasNight', 'wetDry'])} onDelete={() => deleteEntry(e.id)} />;
+              return <Row key={e.id} left={<><Icon name="morning" size={16} /> {dateStr(e.bedtime)}</>} right={ans(e.answers, ['howWasNight', 'wetDry'])} onDelete={() => del(e)} />;
           }
         })}
       </div>

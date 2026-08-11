@@ -174,6 +174,8 @@ interface Store extends State {
   logCheckin: (c: { interference: number; bother: number }) => void;
   /** Remove a logged entry by id — for something recorded by accident. */
   deleteEntry: (id: string) => void;
+  /** Put a just-deleted entry back (for undo), keeping its original time-order. */
+  restoreEntry: (entry: LogEntry) => void;
   removeDrinkType: (name: string) => void;
   addDrinkType: (name: string) => void;
   setUnits: (u: Units) => void;
@@ -351,6 +353,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logCheckin: ({ interference, bother }) =>
         setState((s) => ({ ...s, checkins: [...s.checkins, { id: id(), at: Date.now(), interference, bother }] })),
       deleteEntry: (eid) => setState((s) => ({ ...s, entries: s.entries.filter((e) => e.id !== eid) })),
+      restoreEntry: (entry) =>
+        setState((s) => (s.entries.some((e) => e.id === entry.id) ? s : { ...s, entries: [...s.entries, entry] })),
       removeDrinkType: (name) => setState((s) => ({ ...s, drinkTypes: s.drinkTypes.filter((t) => t !== name) })),
       addDrinkType: (name) => setState((s) => (s.drinkTypes.includes(name) ? s : { ...s, drinkTypes: [...s.drinkTypes, name] })),
       setUnits: (u) => setState((s) => ({ ...s, units: u })),
