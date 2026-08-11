@@ -23,7 +23,10 @@ const Metric = ({ n, label }: { n: ReactNode; label: string }) => (
 );
 
 export function Report() {
-  const { entries, enabledModules, drinkTypes, units, reports, products, checkins, navigate, openDetail, loadSample } = useStore();
+  const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
+  // Evening/bedtime medications are the ones that can shape the night numbers — surface them
+  // as plain context beside nocturia, so the person (and their provider) reads the two together.
+  const nightMeds = meds.filter((m) => m.timing === 'Evening' || m.timing === 'Bedtime');
   const lastCk = checkins[checkins.length - 1];
   const prevCk = checkins[checkins.length - 2];
   const voids = voidsOf(entries);
@@ -137,6 +140,12 @@ export function Report() {
           </div>
           {measured && !measured.complete && <div className="pill warn" style={{ marginTop: 12 }}>{measured.incompleteNote}</div>}
           {measured?.npi.overThreshold && <div className="pill warn" style={{ marginTop: 12 }}>Over 33% threshold</div>}
+          {nightMeds.length > 0 && (
+            <div className="sub" style={{ marginTop: 12 }}>
+              Taken in the evening or at bedtime: {nightMeds.map((m) => `${m.name} (${m.timing.toLowerCase()})`).join(', ')}.
+              Worth reading alongside the night numbers.
+            </div>
+          )}
         </Card>
       )}
 

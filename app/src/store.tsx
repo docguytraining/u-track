@@ -20,7 +20,7 @@ import type { Units } from './units';
 import { cloudEnabled, onAuth, db, signInWithGoogle, signOutUser, completeMagicLink } from './firebase';
 
 /** Fields that persist to Firestore (everything except transient UI/auth state). */
-const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries', 'checkins'] as const;
+const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries', 'checkins', 'meds'] as const;
 type Persisted = Pick<State, (typeof PERSIST_KEYS)[number]>;
 const pickPersisted = (o: State): Persisted =>
   Object.fromEntries(PERSIST_KEYS.map((k) => [k, o[k]])) as Persisted;
@@ -41,6 +41,20 @@ export interface CheckIn {
   interference: number;
   /** How much it bothered you, 0–10. */
   bother: number;
+}
+
+/** When during the day a medication is usually taken. Timing is the point clinically:
+ * an evening or bedtime diuretic can look exactly like nocturia on the chart, so a
+ * provider reading the export wants the medication list next to the night numbers. */
+export type MedTiming = 'Morning' | 'Midday' | 'Evening' | 'Bedtime' | 'As needed';
+export const MED_TIMINGS: MedTiming[] = ['Morning', 'Midday', 'Evening', 'Bedtime', 'As needed'];
+
+/** A medication the person takes — context for reading the diary, not a dosing log.
+ * We record only the name and when it's taken; the app never judges or advises on it. */
+export interface Med {
+  id: string;
+  name: string;
+  timing: MedTiming;
 }
 
 /**
@@ -151,6 +165,8 @@ interface State {
   units: Units;
   entries: LogEntry[];
   checkins: CheckIn[];
+  /** Medications the person takes, with timing — context for reading the night data. */
+  meds: Med[];
   measuredDay: boolean;
   screen: Screen;
   /** Which drill-down the detail screen is showing. */
@@ -172,6 +188,8 @@ interface Store extends State {
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   logCheckin: (c: { interference: number; bother: number }) => void;
+  addMed: (name: string, timing: MedTiming) => void;
+  removeMed: (id: string) => void;
   /** Remove a logged entry by id — for something recorded by accident. */
   deleteEntry: (id: string) => void;
   /** Put a just-deleted entry back (for undo), keeping its original time-order. */
@@ -213,6 +231,7 @@ const initial: State = {
   units: 'oz', // freedom units by default; toggle in Settings
   entries: [],
   checkins: [],
+  meds: [],
   measuredDay: false,
   screen: 'onboarding',
   detail: null,
@@ -280,7 +299,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const t = setTimeout(() => { setDoc(ref, snapshot, { merge: true }).catch(() => {}); }, 500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.user, state.onboarded, state.enabledModules, state.traits, state.products, state.drinkTypes, state.units, state.entries]);
+  }, [state.user, state.onboarded, state.enabledModules, state.traits, state.products, state.drinkTypes, state.units, state.entries, state.checkins, state.meds]);
 
   const store = useMemo<Store>(() => {
     const voids = state.entries.filter((e): e is VoidEntry => e.kind === 'void');
@@ -352,6 +371,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       logCheckin: ({ interference, bother }) =>
         setState((s) => ({ ...s, checkins: [...s.checkins, { id: id(), at: Date.now(), interference, bother }] })),
+      addMed: (name, timing) =>
+        setState((s) => ({ ...s, meds: [...s.meds, { id: id(), name, timing }] })),
+      removeMed: (mid) => setState((s) => ({ ...s, meds: s.meds.filter((m) => m.id !== mid) })),
       deleteEntry: (eid) => setState((s) => ({ ...s, entries: s.entries.filter((e) => e.id !== eid) })),
       restoreEntry: (entry) =>
         setState((s) => (s.entries.some((e) => e.id === entry.id) ? s : { ...s, entries: [...s.entries, entry] })),
