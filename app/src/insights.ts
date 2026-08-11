@@ -1,5 +1,10 @@
 import type { SleepPeriod } from '@core';
-import type { LogEntry, VoidEntry, NightEntry, ChangeEntry, DrinkEntry } from './store';
+import type { LogEntry, VoidEntry, NightEntry, ChangeEntry, DrinkEntry, Product } from './store';
+
+/** Products that fit a context — daytime or overnight. 'both' and untagged always fit,
+ * so scoping a picker never hides a product the user hasn't classified. */
+export const productsForContext = (products: readonly Product[], context: 'day' | 'night') =>
+  products.filter((p) => p.usage == null || p.usage === 'both' || p.usage === context);
 
 /** Every bladder emptying, whatever its destination — the base for frequency. */
 export const voidsOf = (e: readonly LogEntry[]) => e.filter((x): x is VoidEntry => x.kind === 'void');

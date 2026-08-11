@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import { useStore } from '../store';
+import { useStore, type ProductUsage } from '../store';
 import { Topbar } from '../ui';
 import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
 import { cloudEnabled, usingEmulator } from '../firebase';
+
+const USAGE_OPTS: { value: ProductUsage; label: string }[] = [
+  { value: 'day', label: 'Daytime' },
+  { value: 'night', label: 'Overnight' },
+  { value: 'both', label: 'Both' },
+];
 
 export function Settings() {
   const { enabledModules, traits, products, drinkTypes, units, entries, user, navigate, reset, loadSample, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
@@ -11,21 +17,24 @@ export function Settings() {
   const [tier, setTier] = useState('');
   const [name, setName] = useState('');
   const [dry, setDry] = useState('');
+  const [usage, setUsage] = useState<ProductUsage>('both');
 
-  // Pick a type first → weight (and a starting name) auto-fill → you rename it.
-  const pickTier = (t: { name: string; grams: number }) => {
+  // Pick a type first → weight, a starting name, and a default usage auto-fill.
+  const pickTier = (t: { name: string; grams: number; usage: ProductUsage }) => {
     setTier(t.name);
     setDry(String(t.grams));
+    setUsage(t.usage);
     if (!name.trim()) setName(t.name);
   };
 
   const add = () => {
     const g = Number(dry);
     if (name.trim() && dry !== '' && !Number.isNaN(g)) {
-      addProduct(name.trim(), g, tier || undefined);
+      addProduct(name.trim(), g, tier || undefined, usage);
       setTier('');
       setName('');
       setDry('');
+      setUsage('both');
     }
   };
 
@@ -80,15 +89,22 @@ export function Settings() {
       {enabledModules.includes('protection') && (
       <div className="card">
         <h3>Protection products</h3>
-        <div className="sub" style={{ marginTop: 2 }}>Rename or adjust weight anytime — dry weights turn a wet product into millilitres.</div>
+        <div className="sub" style={{ marginTop: 2 }}>Rename, reweigh, or set when you use each one. Dry weights turn a wet product into millilitres; the day/night tag scopes which products you're offered when logging.</div>
 
-        <div className="list" style={{ marginTop: 12 }}>
+        <div className="list" style={{ marginTop: 12, gap: 14 }}>
           {products.length === 0 && <div className="sub">No products yet.</div>}
           {products.map((p) => (
-            <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input className="numinput" style={{ flex: 2 }} value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} />
-              <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" value={p.dryGrams} onChange={(e) => updateProduct(p.id, { dryGrams: Number(e.target.value) })} />
-              <button className="ghost danger" style={{ minHeight: 48, padding: '0 12px' }} onClick={() => removeProduct(p.id)}>✕</button>
+            <div key={p.id}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input className="numinput" style={{ flex: 2 }} value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} />
+                <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" value={p.dryGrams} onChange={(e) => updateProduct(p.id, { dryGrams: Number(e.target.value) })} />
+                <button className="ghost danger" style={{ minHeight: 48, padding: '0 12px' }} onClick={() => removeProduct(p.id)}>✕</button>
+              </div>
+              <div className="chips" style={{ marginTop: 6 }}>
+                {USAGE_OPTS.map((u) => (
+                  <button key={u.value} className={(p.usage ?? 'both') === u.value ? 'selected' : ''} onClick={() => updateProduct(p.id, { usage: u.value })}>{u.label}</button>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -105,6 +121,11 @@ export function Settings() {
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <input className="numinput" style={{ flex: 2 }} placeholder="Name it" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" placeholder="Dry g" value={dry} onChange={(e) => setDry(e.target.value)} />
+        </div>
+        <div className="chips" style={{ marginTop: 8 }}>
+          {USAGE_OPTS.map((u) => (
+            <button key={u.value} className={usage === u.value ? 'selected' : ''} onClick={() => setUsage(u.value)}>{u.label}</button>
+          ))}
         </div>
         <button className="block center" style={{ marginTop: 8 }} onClick={add} disabled={!name.trim() || dry === ''}>Add product</button>
       </div>

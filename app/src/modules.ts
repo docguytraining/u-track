@@ -91,9 +91,9 @@ export const MODULES: Record<string, ModuleDef> = {
     label: 'Protection',
     blurb: 'Pads, guards, diapers',
     widget: 'Protection use',
-    questions: [
-      q('protectionUsed', 'morning', false, 45, 'Protection overnight?', ['None', 'Pad / guard', 'Pull-up', 'Diaper']),
-    ],
+    // "Which protection overnight?" is asked from the user's own product library in the
+    // morning check-in (scoped to overnight products), not as a fixed multiple-choice.
+    questions: [],
   },
   awareness: {
     id: 'awareness',
@@ -111,16 +111,21 @@ export const MODULE_ORDER = ['nocturia', 'nightWetting', 'urgency', 'leakage', '
  * entries when onboarding says you use protection; each product is then renameable
  * and reweighable in Settings. Weights are tier defaults, not exact product specs.
  */
-export const PRODUCT_TIERS: { name: string; grams: number }[] = [
-  { name: 'Light guard / shield', grams: 20 }, // Prevail Guard, Tena Men L1
-  { name: 'Standard guard', grams: 40 }, // Depend Guard, Tena Men L2/3
-  { name: 'Daytime pull-up', grams: 60 }, // Depend Real Fit, Tena Stretch
-  { name: 'Overnight brief', grams: 100 }, // Tranquility ATN, TENA Complete
-  { name: 'Max-capacity brief', grams: 220 }, // NorthShore MegaMax, BetterDry
+type TierUsage = 'day' | 'night' | 'both';
+export const PRODUCT_TIERS: { name: string; grams: number; usage: TierUsage }[] = [
+  { name: 'Light guard / shield', grams: 20, usage: 'day' }, // Prevail Guard, Tena Men L1
+  { name: 'Standard guard', grams: 40, usage: 'day' }, // Depend Guard, Tena Men L2/3
+  { name: 'Daytime pull-up', grams: 60, usage: 'day' }, // Depend Real Fit, Tena Stretch
+  { name: 'Overnight brief', grams: 100, usage: 'night' }, // Tranquility ATN, TENA Complete
+  { name: 'Max-capacity brief', grams: 220, usage: 'night' }, // NorthShore MegaMax, BetterDry
 ];
 
 export const DEFAULT_DRY_WEIGHTS: Record<string, number> = Object.fromEntries(
   PRODUCT_TIERS.map((t) => [t.name, t.grams]),
+);
+/** A product's default usage, inferred from the tier it was created from. */
+export const USAGE_BY_TIER: Record<string, TierUsage> = Object.fromEntries(
+  PRODUCT_TIERS.map((t) => [t.name, t.usage]),
 );
 
 /**
