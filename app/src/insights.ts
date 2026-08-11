@@ -205,9 +205,10 @@ const dayKeyOf = (at: number) => new Date(at).toLocaleDateString('en-CA');
  * surfaces the pattern for a provider conversation, it doesn't diagnose.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** Rough mL for an unmeasured void, from its reported size. Conservative and clearly an
- * estimate — a relative signal for spotting bursts, not a measured figure. */
-const SIZE_ML: Record<string, number> = { Small: 100, Medium: 200, Large: 350 };
+/** Rough mL for an unmeasured event, from its reported size. Conservative and clearly an
+ * estimate — a relative signal for spotting bursts, not a measured figure. 'Medium' is a legacy
+ * value from the older size scale. */
+const SIZE_ML: Record<string, number> = { Dribble: 15, Small: 60, Medium: 200, Moderate: 150, Large: 300, Full: 500 };
 /** Rough mL for an involuntary loss, from its reported severity. */
 const SEVERITY_ML: Record<string, number> = { 'A few drops': 15, Damp: 40, Moderate: 100, Soaked: 250 };
 

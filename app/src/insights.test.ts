@@ -204,7 +204,7 @@ describe('voidEffectiveMl', () => {
     expect(voidEffectiveMl(mv(noon, 320))).toEqual({ ml: 320, estimated: false });
   });
   it('estimates from reported size when unmeasured', () => {
-    expect(voidEffectiveMl(pv(noon, 'Large'))).toEqual({ ml: 350, estimated: true });
+    expect(voidEffectiveMl(pv(noon, 'Large'))).toEqual({ ml: 300, estimated: true });
   });
   it('estimates a leak from its severity', () => {
     expect(voidEffectiveMl(leak({ leakSeverity: 'Soaked' }))).toEqual({ ml: 250, estimated: true });
@@ -230,10 +230,10 @@ describe('detectVolumeSurges', () => {
     expect(detectVolumeSurges([mv(noon, 250), mv(noon + 3 * H, 250)])).toHaveLength(0);
   });
   it('uses size estimates and marks the episode estimated', () => {
-    const s = detectVolumeSurges([pv(noon, 'Large'), pv(noon + 20 * 60_000, 'Large')]); // 350+350
+    const s = detectVolumeSurges([pv(noon, 'Large'), pv(noon + 20 * 60_000, 'Large')]); // 300+300
     expect(s).toHaveLength(1);
     expect(s[0]!.estimated).toBe(true);
-    expect(s[0]!.totalMl).toBe(700);
+    expect(s[0]!.totalMl).toBe(600);
   });
 });
 

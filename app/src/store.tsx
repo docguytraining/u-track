@@ -55,7 +55,7 @@ export interface AppUser {
   email: string | null;
 }
 
-export type Screen = 'onboarding' | 'home' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'checkin' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
+export type Screen = 'onboarding' | 'home' | 'log' | 'void' | 'leak' | 'change' | 'drink' | 'morning' | 'checkin' | 'report' | 'chart' | 'detail' | 'settings' | 'signin';
 
 /** A weekly quality-of-life check-in — the "how much is this affecting you" side of a
  * clinical questionnaire, tracked over time. Two 0–10 scales, kept apart from `entries`. */
@@ -217,6 +217,9 @@ interface Store extends State {
   completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
   logVoid: (v: { where?: VoidWhere; leaked?: boolean; volumeMl?: number | null; size?: string | null; productId?: string | null; answers: Record<string, string>; at?: number }) => void;
   logLeak: (answers: Record<string, string>, at?: number, opts?: { contained?: boolean; productId?: string | null }) => void;
+  /** The unified single-button log: one event described by where it went + how much, from which
+   * the void/leak distinction and continence are derived. `escaped` only applies to a product. */
+  logEvent: (e: { where: 'toilet' | 'product' | 'clothing'; size: string | null; escaped?: boolean; volumeMl?: number | null; productId?: string | null; answers?: Record<string, string>; at?: number }) => void;
   logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   logCheckin: (c: { interference: number; bother: number }) => void;
@@ -460,6 +463,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             leaked: !opts?.contained,
             volumeMl: null, size: null,
             productId: opts?.contained ? (opts.productId ?? null) : null,
+            answers,
+          }],
+        })),
+      // Translate the unified event into the stored void record. Continence is where it went:
+      // toilet = a continent void (may carry a measured volume on a 24-hour check); into product
+      // or onto clothing = an involuntary loss (a leak), with `leaked` marking whether it escaped
+      // containment. "Void" vs "leak" is never stored — it's read back off `where`/`leaked`.
+      logEvent: ({ where, size, escaped = false, volumeMl = null, productId = null, answers = {}, at }) =>
+        setState((s) => ({
+          ...s,
+          notice: where === 'toilet' ? 'Void logged' : 'Leak logged',
+          entries: [...s.entries, {
+            kind: 'void', id: id(), at: at ?? Date.now(),
+            where: where === 'clothing' ? null : where,
+            leaked: where === 'clothing' ? true : where === 'product' ? escaped : false,
+            // Measured volume is a 24-hour-check thing and only applies to a toilet void; the
+            // qualitative size is kept for every event (it's what estimates volume off-check).
+            volumeMl: where === 'toilet' ? volumeMl : null,
+            size,
+            productId: where === 'product' ? productId : null,
             answers,
           }],
         })),

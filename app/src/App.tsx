@@ -3,6 +3,7 @@ import { useStore } from './store';
 import { selectScreen, type ScreenKey } from './routing';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
+import { LogEvent } from './screens/LogEvent';
 import { LogVoid } from './screens/LogVoid';
 import { LogLeak } from './screens/LogLeak';
 import { LogChange } from './screens/LogChange';
@@ -39,6 +40,7 @@ export function App() {
     splash: Splash,
     signin: <SignIn />,
     onboarding: <Onboarding />,
+    log: <LogEvent />,
     void: <LogVoid />,
     leak: <LogLeak />,
     change: <LogChange />,
