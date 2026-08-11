@@ -1,0 +1,45 @@
+name: CI
+
+# Runs on every pull request (and pushes to main) so nothing merges — and therefore
+# nothing deploys — with red tests or a broken build. The deploy workflow re-runs these
+# same checks before shipping; this just moves the feedback to the PR, before merge.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Core (pure clinical logic) tests.
+      - name: Install core deps
+        run: npm ci
+      - name: Test core
+        run: npm test
+
+      # App (React/PWA) tests.
+      - name: Install app deps
+        run: npm --prefix app ci
+      - name: Test app
+        run: npm --prefix app test
+
+      # A production build must succeed — a bundling/type error here would otherwise
+      # only surface at deploy time. No Firebase config needed: the build works without
+      # it (the app just runs local-only), and we're checking compilation, not cloud.
+      - name: Build app
+        run: npm --prefix app run build
