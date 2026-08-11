@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { sometimesMissesToilet, awarenessReduced } from '../insights';
+import { sometimesMissesToilet, awarenessReduced, productsForContext } from '../insights';
 import { Topbar, OptionGroup, VolumeField, WhenField } from '../ui';
 
 /**
@@ -32,6 +32,8 @@ export function LogVoid() {
   const [showMore, setShowMore] = useState(false);
 
   const askDest = sometimesMissesToilet(enabledModules, traits);
+  // A daytime void into a product → offer the daytime products (overnight-only ones stay out).
+  const dayProducts = productsForContext(products, 'day');
   const usesProtection = enabledModules.includes('protection');
   const [dest, setDest] = useState('');
   const [productId, setProductId] = useState(products[0]?.id ?? '');
@@ -118,11 +120,11 @@ export function LogVoid() {
               {leakGateway.map((q) => (
                 <OptionGroup key={q.id} question={q} value={answers[q.id]} onChange={(v) => set(q.id, v)} />
               ))}
-              {products.length > 1 && (
+              {dayProducts.length > 1 && (
                 <div className="field">
                   <label>Which product? — optional</label>
                   <div className="chips">
-                    {products.map((p) => (
+                    {dayProducts.map((p) => (
                       <button key={p.id} className={productId === p.id ? 'selected' : ''} onClick={() => setProductId(p.id)}>{p.name}</button>
                     ))}
                   </div>
