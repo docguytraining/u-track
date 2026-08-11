@@ -170,6 +170,8 @@ interface Store extends State {
   updateProduct: (id: string, patch: { name?: string; dryGrams?: number; usage?: ProductUsage }) => void;
   removeProduct: (id: string) => void;
   loadSample: () => void;
+  /** Replace all diary data from a backup file's `data` payload (migrating old entries). */
+  restoreBackup: (data: Record<string, unknown>) => void;
   rerunOnboarding: () => void;
   reset: () => void;
   enabledModuleDefs: ModuleDef[];
@@ -406,6 +408,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }),
       // Clear all diary data but stay signed in (persisted → also clears the cloud doc).
       reset: () => setState((s) => ({ ...initial, user: s.user, authReady: true })),
+      restoreBackup: (data) =>
+        setState((s) => {
+          const next: State = { ...s };
+          for (const k of PERSIST_KEYS) if (data[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = data[k];
+          // Bring restored entries up to the current shape (old backups may predate the model).
+          next.entries = normalizeEntries(Array.isArray(data.entries) ? (data.entries as unknown[]) : s.entries);
+          return next;
+        }),
       enabledModuleDefs: state.enabledModules.map((m) => MODULES[m]).filter((m): m is ModuleDef => !!m),
       coreQuestions: (surface) =>
         composeCore(trackingModules(state.enabledModules), surface) as AppQuestion[],
