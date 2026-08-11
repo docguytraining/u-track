@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 import { Icon } from '../icons';
@@ -110,7 +110,8 @@ export function Report() {
   const prevCk = checkins[checkins.length - 2];
   const voids = voidsOf(entries);
   const toiletVoids = toiletVoidsOf(entries);
-  const leaks = leaksOf(entries);
+  const leaks = leaksOf(entries); // escaped onto clothing/bed — the containment-breach subset
+  const episodes = incontinenceEpisodesOf(entries); // all involuntary loss (escaped + into product)
   const nights = nightsOf(entries);
   const adequacy = productAdequacy(nights, products);
   const leaky = leakyProducts(adequacy);
@@ -214,8 +215,7 @@ export function Report() {
       <Card title="Activity" onClick={() => openDetail('log')}>
         <div className="grid">
           <Metric n={toiletVoids.length} label="voids" />
-          <Metric n={leaks.length} label="leaks" />
-          {wettings.length > 0 && <Metric n={wettings.length} label="wettings" />}
+          <Metric n={episodes.length} label="leaks" />
           <Metric n={nights.length} label="nights" />
           <Metric n={trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} label="voids / day" />
         </div>
@@ -281,12 +281,12 @@ export function Report() {
         <Card title="Protection" onClick={() => openDetail('changes')}>
           <div className="grid">
             <Metric n={changes.length} label="changes" />
-            <Metric n={wettings.length} label="wettings" />
+            <Metric n={wettings.length} label="into product" />
             <Metric n={absorbedMl > 0 ? fmtVol(absorbedMl, units) : '—'} label="absorbed" />
           </div>
           {wettings.length > 0 && (
             <div className="sub" style={{ marginTop: 10 }}>
-              {emptyingsPerDay.toFixed(1)} bladder emptyings / day counting wettings — vs{' '}
+              {emptyingsPerDay.toFixed(1)} bladder emptyings / day counting leaks into protection — vs{' '}
               {trend.voidsPerDay ? trend.voidsPerDay.toFixed(1) : '0'} from toilet voids alone.
             </div>
           )}

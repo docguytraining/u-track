@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { sometimesMissesToilet, awarenessReduced, productsForContext } from '../insights';
+import { sometimesMissesToilet, productsForContext } from '../insights';
 import { Topbar, OptionGroup, VolumeField, WhenField } from '../ui';
 
 /**
@@ -23,8 +23,8 @@ export function LogVoid() {
   const urgencyQ = core.find((q) => q.id === 'urgency'); // ties urgency to a product void too
   const leakCore = coreQuestions('leak');
   const triggerQ = leakCore.find((q) => q.id === 'leakTrigger'); // why it happened — always relevant
-  const severityQ = leakCore.find((q) => q.id === 'leakSeverity'); // how much *leaked* — only if it did
-  const leakGateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
+  const severityQ = leakCore.find((q) => q.id === 'leakSeverity'); // how much escaped — only if it did
+  const leakGateway = gatewayQuestions('leak'); // incl. "did you feel it?" — relevant to any wetting
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
   const [size, setSize] = useState('');
@@ -102,9 +102,10 @@ export function LogVoid() {
           {urgencyQ && <OptionGroup question={urgencyQ} value={answers[urgencyQ.id]} onChange={(v) => set(urgencyQ.id, v)} />}
           {triggerQ && <OptionGroup question={triggerQ} value={answers[triggerQ.id]} onChange={(v) => set(triggerQ.id, v)} />}
 
-          {/* Escape is its own axis; "how much leaked" only makes sense once something did. */}
+          {/* Containment is its own axis: did the product catch it, or did some escape? "How much
+              escaped" only makes sense once something did. */}
           <OptionGroup
-            question={{ id: 'leaked', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Did any leak through — onto clothing or the bed?', options: ['No', 'Yes'] }}
+            question={{ id: 'leaked', surface: 'leak', coreEligible: false, priority: 0, prompt: 'Did any escape onto clothing or the bed?', options: ['No', 'Yes'] }}
             value={leaked}
             onChange={setLeaked}
           />

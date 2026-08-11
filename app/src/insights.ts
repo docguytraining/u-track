@@ -42,6 +42,17 @@ export const toiletVoidsOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) =
 export const leaksOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.leaked);
 /** Voids that went into protection — the "wettings" (into a product). */
 export const wettingsOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.where === 'product' || v.where === 'both');
+
+/**
+ * Every involuntary loss of urine — the leak *symptom* a clinician reads as leakage — however
+ * it was contained. That is one coin with two sides: caught by protection (a void into a
+ * product) and reaching clothing/bed (an escape) are the same event, differing only in
+ * containment. Whether the user tapped "void" or "leak" is their perspective, not the verdict;
+ * what makes it incontinence is that it didn't reach the toilet under control. A clean toilet
+ * void is the only thing this excludes.
+ */
+export const incontinenceEpisodesOf = (e: readonly LogEntry[]) =>
+  voidsOf(e).filter((v) => v.leaked || v.where === 'product' || v.where === 'both' || v.where == null);
 export const nightsOf = (e: readonly LogEntry[]) => e.filter((x): x is NightEntry => x.kind === 'night');
 export const changesOf = (e: readonly LogEntry[]) => e.filter((x): x is ChangeEntry => x.kind === 'change');
 export const drinksOf = (e: readonly LogEntry[]) => e.filter((x): x is DrinkEntry => x.kind === 'drink');
@@ -197,8 +208,8 @@ const dayKeyOf = (at: number) => new Date(at).toLocaleDateString('en-CA');
 /** Rough mL for an unmeasured void, from its reported size. Conservative and clearly an
  * estimate — a relative signal for spotting bursts, not a measured figure. */
 const SIZE_ML: Record<string, number> = { Small: 100, Medium: 200, Large: 350 };
-/** Rough mL for an escape, from its severity. */
-const SEVERITY_ML: Record<string, number> = { Damp: 40, Moderate: 100, Soaked: 250 };
+/** Rough mL for an involuntary loss, from its reported severity. */
+const SEVERITY_ML: Record<string, number> = { 'A few drops': 15, Damp: 40, Moderate: 100, Soaked: 250 };
 
 /** A void's effective volume for burst detection: the measured mL, else an estimate from its
  * reported size or leak severity. Null when there's no volume signal at all. */

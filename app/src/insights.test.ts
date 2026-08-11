@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, minuteOfDayStr } from './insights';
+import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, minuteOfDayStr } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -274,5 +274,23 @@ describe('minuteOfDayStr', () => {
   it('formats minutes since midnight as a clock time', () => {
     expect(minuteOfDayStr(0)).toMatch(/12:00/);      // midnight
     expect(minuteOfDayStr(5 * 60 + 5)).toMatch(/5:05/); // 5:05
+  });
+});
+
+describe('incontinenceEpisodesOf (unified leak symptom)', () => {
+  it('includes every involuntary loss — into product or escaped — but not clean toilet voids', () => {
+    const entries = [
+      v(noon),                              // clean toilet void → excluded
+      mv(noon + H, 250),                    // measured toilet void → excluded
+      wetting(noon + 2 * H, {}),            // into product (contained) → included
+      leak({ leakSeverity: 'Damp' }),       // escaped onto clothing → included
+    ];
+    const eps = incontinenceEpisodesOf(entries);
+    expect(eps).toHaveLength(2);
+    expect(eps.every((e) => e.where === 'product' || e.leaked)).toBe(true);
+  });
+
+  it('estimates a "a few drops" leak volume', () => {
+    expect(voidEffectiveMl(leak({ leakSeverity: 'A few drops' }))).toEqual({ ml: 15, estimated: true });
   });
 });

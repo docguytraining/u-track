@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { awarenessReduced } from '../insights';
 import { Topbar, OptionGroup, WhenField } from '../ui';
 
 export function LogLeak() {
-  const { coreQuestions, gatewayQuestions, logLeak, navigate, traits, enabledModules } = useStore();
+  const { coreQuestions, gatewayQuestions, logLeak, navigate, enabledModules } = useStore();
   const usesProtection = enabledModules.includes('protection');
   const core = coreQuestions('leak');
-  // The awareness question only earns its place for reduced-sensation profiles.
-  const gateway = gatewayQuestions('leak').filter((q) => q.id !== 'leakAwareness' || awarenessReduced(traits));
+  // "Did you feel it happen?" earns a permanent place here: a leak you didn't notice is exactly
+  // the kind of event this screen exists to capture, so it's offered to everyone — not gated to
+  // reduced-sensation profiles the way it is on the void screen.
+  const gateway = gatewayQuestions('leak');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [at, setAt] = useState<number | null>(null);
   const [showMore, setShowMore] = useState(false);
@@ -22,11 +23,11 @@ export function LogLeak() {
   return (
     <div className="screen">
       <Topbar title="Log a leak" onBack={() => navigate('home')} />
-      <p className="lead">A leak is urine that got <b>out</b> — onto your clothing, skin, or the bed.</p>
+      <p className="lead">A leak is urine that came out when you didn't mean it to — any amount, even a few drops you barely noticed, onto your clothing, skin, or the bed.</p>
       {usesProtection && (
         <p className="note" style={{ marginTop: -6 }}>
-          If it stayed in your protection, that's a void —{' '}
-          <button onClick={() => navigate('void')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>log it as a void instead</button>.
+          If it went into your protection instead, log it as a{' '}
+          <button onClick={() => navigate('void')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>void into your product</button> — same event, just caught.
         </p>
       )}
 
