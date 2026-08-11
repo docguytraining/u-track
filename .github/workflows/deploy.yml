@@ -36,6 +36,22 @@ jobs:
       - name: Test app
         run: npm --prefix app test
 
+      # Fail loudly if the web config is absent, rather than shipping a bundle whose
+      # sign-in says "cloud not configured" while the deploy reports success.
+      - name: Verify Firebase web config is present
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+        run: |
+          missing=""
+          [ -z "$VITE_FIREBASE_API_KEY" ] && missing="$missing VITE_FIREBASE_API_KEY"
+          [ -z "$VITE_FIREBASE_APP_ID" ] && missing="$missing VITE_FIREBASE_APP_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Firebase web config repo Variable(s):$missing — add them under Settings → Secrets and variables → Actions → Variables, or sign-in ships as 'cloud not configured'."
+            exit 1
+          fi
+          echo "Firebase web config present."
+
       # Produce app/dist, which firebase.json serves as the hosting root.
       # Vite inlines VITE_* at build time. The Firebase *web* config is NOT secret (it
       # only identifies the project; real protection is Firestore rules + Auth), so the
