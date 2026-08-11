@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
+import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -116,6 +116,28 @@ describe('productsForContext', () => {
     const products = [P('d', 'day'), P('n', 'night'), P('b', 'both'), P('u')];
     expect(productsForContext(products, 'night').map((p) => p.id)).toEqual(['n', 'b', 'u']);
     expect(productsForContext(products, 'day').map((p) => p.id)).toEqual(['d', 'b', 'u']);
+  });
+});
+
+describe('productAdequacy / leakyProducts', () => {
+  const prod = (id: string): Product => ({ id, name: id, dryGrams: 50 });
+  const N = (pid: string, leaked: boolean) =>
+    night(noon, { protectionProductId: pid, ...(leaked ? { leakedThrough: 'Yes' } : {}) });
+
+  it('tallies nights and leaks per product, ignoring unset and "none"', () => {
+    const nights = [N('a', true), N('a', true), N('a', false), N('b', false), night(noon, {}), night(noon, { protectionProductId: 'none', leakedThrough: 'Yes' })];
+    const stats = productAdequacy(nights, [prod('a'), prod('b')]);
+    const a = stats.find((s) => s.productId === 'a')!;
+    expect(a.nights).toBe(3);
+    expect(a.leaks).toBe(2);
+    expect(stats.find((s) => s.productId === 'b')!.leaks).toBe(0);
+    expect(stats.some((s) => s.productId === 'none')).toBe(false);
+  });
+
+  it('flags a product leaking over the rate with enough nights, but not on a thin sample', () => {
+    const stats = productAdequacy([N('a', true), N('a', true), N('a', false)], [prod('a')]); // 2 of 3
+    expect(leakyProducts(stats).map((s) => s.productId)).toEqual(['a']);
+    expect(leakyProducts(stats, 5)).toHaveLength(0);
   });
 });
 
