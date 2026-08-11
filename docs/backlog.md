@@ -1,7 +1,11 @@
 # Backlog & design decisions
 
 Working record of decisions from the wetting/void design pass. Living doc — not a spec
-yet. Items are grouped by status. The design principles at the bottom are standing rules.
+yet. The design principles below are standing rules.
+
+**The actionable backlog now lives in [GitHub issues](https://github.com/docguytraining/u-track/issues).**
+This file is the *why* — the design rationale and the record of what we decided and why.
+Open work is tracked as tickets; this doc links to them rather than duplicating them.
 
 ## Standing design principles
 
@@ -36,39 +40,37 @@ yet. Items are grouped by status. The design principles at the bottom are standi
   (a wet morning logs the overnight output as a change, not a phantom toilet void).
 - Unified single-stroke icon set; fixed the Report → Activity crash.
 
-## Agreed — to build
+## Shipped since (the "agreed — to build" list)
 
-1. **Void as the umbrella model.** Everything is a VOID (bladder emptying). Attach two
-   facts instead of separate event types:
-   - **Where:** toilet / product / combination.
-   - **Leaked?** did any escape containment. Infer where possible: no product + not the
-     toilet ⇒ leak; product that held ⇒ not a leak; product that escaped ⇒ the leak that
-     matters (product-adequacy signal). This collapses today's separate void/wetting/leak
-     types into one void + attributes.
-2. **Urgency tied to the leak, per episode** (provider gap 5). A single void must be able
-   to carry both *was it urgent?* and *did it leak?* — that pairing is what separates
-   stress vs urge vs mixed, which decides treatment.
-3. **Product form factor** (from the "diaper" discussion). Replace the vague "Diaper"
-   option with specific, inclusive types — Pad/guard · Pull-up (disposable) · Washable
-   underwear · Tabbed brief. Track form factor as a **product-library property** (set
-   once), so it can power two signals: adequacy (frequent escapes ⇒ size up) and cost
-   (e.g. four disposable briefs/day vs one high-capacity brief).
-4. **Weekly opt-in bother / QoL check-in** (provider gap 1). Daily logging already is the
-   *symptom* side of the standard questionnaires; this adds the *bother* item at the
-   bottom — as a trend over weeks rather than a one-off office snapshot. Mirror the right
-   item per profile (ICIQ-UI-style 0–10 "interference with everyday life" for
-   incontinence; IPSS-style QoL for emptying/BPH; nocturia QoL). ~3 questions, opt-in,
-   dismissible. Framed as *interference with daily life*, not "how bad do you feel" — so it
-   stays matter-of-fact. **Verify exact wording/scoring and licensing before embedding any
-   validated instrument verbatim** (ICIQ requires registration; IPSS is freely usable).
-5. **Medications & timing** (provider gap 2). Capture meds — especially diuretics and
-   their timing, and what's already been tried — as context, so the frequency/nocturia
-   chart isn't misread (e.g. an evening water pill masquerading as nocturia).
+All five agreed items have shipped or are in review — kept here as the rationale record:
 
-## Backlog — deferred
+1. **Void as the umbrella model.** Everything is a VOID (bladder emptying) with two
+   attributes instead of separate event types — **where** (toilet / product / both) and
+   **leaked?** (did any escape containment). A product that escaped is the leak that
+   matters (product-adequacy signal). Collapsed the old void/wetting/leak types into one
+   void + attributes, with a migration for existing entries.
+2. **Urgency tied to the leak, per episode** (provider gap 5). A single void carries both
+   *was it urgent?* and *did it leak?* — the pairing that separates stress vs urge vs
+   mixed.
+3. **Product form factor** (from the "diaper" discussion). Specific, inclusive product
+   types as a product-library property (set once), powering adequacy and cost signals —
+   plus day/night usage tags that scope which products are offered when logging.
+4. **Weekly opt-in bother / QoL check-in** (provider gap 1). A trend over weeks: two
+   neutral 0–10 scales (interference, bother), framed as *interference with daily life*,
+   opt-in and dismissible. Uses our own plain wording, **not** a validated instrument
+   verbatim — see issue on licensing before that line is ever crossed.
+5. **Medications & timing** (provider gap 2). Meds captured as context (with timing), so
+   an evening diuretic isn't misread as nocturia on the chart.
 
-- **Red flags: pain and blood** (provider gap 3). Let the user note dysuria (burning) and
-  hematuria (blood) as plain factual observations — never a diagnosis, but the things that
-  shouldn't wait for a trend. Surface gently as "worth mentioning to your doctor."
-- **Bowel / constipation** (provider gap 4). A lightweight signal — constipation and
-  straining press on the bladder and can drive urgency/frequency.
+## Deferred — tracked as issues
+
+- **Red flags: pain and blood** (provider gap 3) →
+  [#21](https://github.com/docguytraining/u-track/issues/21). Dysuria and hematuria as
+  plain factual notes, surfaced calmly as "worth mentioning to your doctor" — needs
+  wording design before build.
+- **Bowel / constipation** (provider gap 4) →
+  [#22](https://github.com/docguytraining/u-track/issues/22). A lightweight signal;
+  constipation drives urgency/frequency.
+- **Validated-instrument licensing** (caveat from item 4) →
+  [#23](https://github.com/docguytraining/u-track/issues/23). Verify ICIQ/IPSS wording &
+  licensing before ever presenting a scale *as* a named instrument.
