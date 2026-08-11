@@ -41,7 +41,7 @@ export function Onboarding() {
     return (
       <div className="screen">
         <span className="eyebrow">u-track</span>
-        <h2>Let’s set up your tracking.</h2>
+        <h1>Let’s set up your tracking.</h1>
         <p className="lead">
           A few quick questions and the app turns on just what fits you — nothing more. You can
           change it anytime in Settings. Even a little tracking is worth showing a doctor.
@@ -72,7 +72,7 @@ export function Onboarding() {
     return (
       <div className="screen">
         <span className="eyebrow">Quick setup · 1 of 2</span>
-        <h2>Which of these sound like you?</h2>
+        <h1>Which of these sound like you?</h1>
         <div className="list">
           {ONBOARD_QUESTIONS.map(({ key, prompt }) => (
             <div className="card" key={key}>
@@ -101,7 +101,7 @@ export function Onboarding() {
     return (
       <div className="screen">
         <span className="eyebrow">{import.meta.env.DEV ? 'Setup' : 'Quick setup · 2 of 2'}</span>
-        <h2>What should I track?</h2>
+        <h1>What should I track?</h1>
         <p className="lead">
           {import.meta.env.DEV
             ? 'Everything’s on — turn off anything you don’t need.'
@@ -140,7 +140,7 @@ export function Onboarding() {
   return (
     <div className="screen">
       <span className="eyebrow">Optional detail</span>
-      <h2>A few extras to sharpen your reports.</h2>
+      <h1>A few extras to sharpen your reports.</h1>
       <p className="lead">All optional — skip any of them.</p>
 
       {wantsProducts && (

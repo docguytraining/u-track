@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import { useStore } from './store';
 import { selectScreen, type ScreenKey } from './routing';
 import { Onboarding } from './screens/Onboarding';
@@ -24,6 +24,16 @@ const Splash = (
 export function App() {
   const { onboarded, screen, authReady } = useStore();
   const key = selectScreen({ authReady, onboarded, screen });
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // On each screen change, move focus to the new screen's heading. Without this a keyboard
+  // user is dropped to <body> (restarting from the top) and a screen-reader user hears
+  // nothing about the new screen. Focusing the heading announces the screen and anchors
+  // keyboard focus. Headings carry no focus ring (the :focus-visible rule targets controls).
+  useEffect(() => {
+    const h = rootRef.current?.querySelector('h1, h2') as HTMLElement | null;
+    if (h) { h.tabIndex = -1; h.focus({ preventScroll: false }); }
+  }, [key]);
 
   const screens: Record<ScreenKey, ReactElement> = {
     splash: Splash,
@@ -42,5 +52,5 @@ export function App() {
     home: <Home />,
   };
 
-  return <div className="app">{screens[key]}</div>;
+  return <div className="app" ref={rootRef}>{screens[key]}</div>;
 }

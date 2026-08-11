@@ -12,7 +12,7 @@ function Card({ title, onClick, children }: { title: string; onClick: () => void
     <button className="card block" onClick={onClick}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>{title}</h3>
-        <span style={{ color: 'var(--muted)' }}>›</span>
+        <span style={{ color: 'var(--muted)' }} aria-hidden="true">›</span>
       </div>
       <div style={{ marginTop: 10 }}>{children}</div>
     </button>
@@ -50,6 +50,13 @@ function RhythmCard({ buckets, days, total, peak }: { buckets: HourBucket[]; day
           );
         })}
       </div>
+      {/* The bars are aria-hidden (not semantic); this is the same data as text for screen readers. */}
+      <p className="sr-only">
+        Voids and leaks by hour of day:{' '}
+        {buckets.filter((b) => b.voids + b.leaks > 0).map((b) =>
+          `${fmtHour(b.hour)} ${b.voids} void${b.voids === 1 ? '' : 's'}${b.leaks ? `, ${b.leaks} leak${b.leaks === 1 ? '' : 's'}` : ''}`,
+        ).join('; ')}.
+      </p>
       <div className="rhythm-axis"><span>12am</span><span>6am</span><span>noon</span><span>6pm</span><span>12am</span></div>
       <div className="rhythm-legend">
         <span className="key"><span className="swatch" style={{ background: 'var(--accent)' }} />voids</span>
@@ -137,6 +144,7 @@ export function Report() {
           {copied ? '✓ Copied — paste into a message to your doctor' : '📋 Copy summary for your doctor'}
         </button>
       )}
+      <span className="sr-only" role="status">{copied ? 'Summary copied to clipboard.' : ''}</span>
       {cap.voids > 0 && (
         <div className={qualityPct === 100 ? 'pill ok' : 'pill warn'} style={{ alignSelf: 'flex-start' }}>
           Data quality: {cap.measured} of {cap.voids} voids measured ({qualityPct}%)

@@ -124,13 +124,13 @@ export function Settings() {
           {products.map((p) => (
             <div key={p.id}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input className="numinput" style={{ flex: 2 }} value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} />
-                <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" value={p.dryGrams} onChange={(e) => updateProduct(p.id, { dryGrams: Number(e.target.value) })} />
-                <button className="ghost danger" style={{ minHeight: 48, padding: '0 12px' }} onClick={() => removeProduct(p.id)}>✕</button>
+                <input className="numinput" style={{ flex: 2 }} aria-label={`Name of ${p.name || 'product'}`} value={p.name} onChange={(e) => updateProduct(p.id, { name: e.target.value })} />
+                <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" aria-label={`Dry weight of ${p.name || 'product'} in grams`} value={p.dryGrams} onChange={(e) => updateProduct(p.id, { dryGrams: Number(e.target.value) })} />
+                <button className="ghost danger" style={{ minHeight: 48, padding: '0 12px' }} aria-label={`Remove ${p.name || 'product'}`} onClick={() => removeProduct(p.id)}><span aria-hidden="true">✕</span></button>
               </div>
-              <div className="chips" style={{ marginTop: 6 }}>
+              <div className="chips" role="radiogroup" aria-label={`When ${p.name || 'this product'} is used`} style={{ marginTop: 6 }}>
                 {USAGE_OPTS.map((u) => (
-                  <button key={u.value} className={(p.usage ?? 'both') === u.value ? 'selected' : ''} onClick={() => updateProduct(p.id, { usage: u.value })}>{u.label}</button>
+                  <button key={u.value} role="radio" aria-checked={(p.usage ?? 'both') === u.value} className={(p.usage ?? 'both') === u.value ? 'selected' : ''} onClick={() => updateProduct(p.id, { usage: u.value })}>{u.label}</button>
                 ))}
               </div>
             </div>
@@ -147,8 +147,8 @@ export function Settings() {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <input className="numinput" style={{ flex: 2 }} placeholder="Name it" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" placeholder="Dry g" value={dry} onChange={(e) => setDry(e.target.value)} />
+          <input className="numinput" style={{ flex: 2 }} aria-label="New product name" placeholder="Name it" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="numinput" style={{ width: 76 }} type="number" inputMode="numeric" aria-label="New product dry weight in grams" placeholder="Dry g" value={dry} onChange={(e) => setDry(e.target.value)} />
         </div>
         <div className="chips" style={{ marginTop: 8 }}>
           {USAGE_OPTS.map((u) => (
@@ -202,18 +202,18 @@ export function Settings() {
                 <span>{m.name}</span>
                 <span className="spacer" />
                 <b style={{ color: 'var(--muted)', fontWeight: 500 }}>{m.timing}</b>
-                <button className="ghost danger" style={{ minHeight: 40, padding: '0 10px', marginLeft: 8 }} onClick={() => removeMed(m.id)}>✕</button>
+                <button className="ghost danger" style={{ minHeight: 44, padding: '0 12px', marginLeft: 8 }} aria-label={`Remove ${m.name}`} onClick={() => removeMed(m.id)}><span aria-hidden="true">✕</span></button>
               </div>
             ))}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <input className="numinput" style={{ flex: 2 }} placeholder="Medication name" value={medName}
+          <input className="numinput" style={{ flex: 2 }} aria-label="Medication name" placeholder="Medication name" value={medName}
             onChange={(e) => setMedName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addMedication(); }} />
         </div>
-        <div className="chips" style={{ marginTop: 8 }}>
+        <div className="chips" role="radiogroup" aria-label="When the medication is taken" style={{ marginTop: 8 }}>
           {MED_TIMINGS.map((t) => (
-            <button key={t} className={medTiming === t ? 'selected' : ''} onClick={() => setMedTiming(t)}>{t}</button>
+            <button key={t} role="radio" aria-checked={medTiming === t} className={medTiming === t ? 'selected' : ''} onClick={() => setMedTiming(t)}>{t}</button>
           ))}
         </div>
         <button className="block center" style={{ marginTop: 8 }} onClick={addMedication} disabled={!medName.trim()}>Add medication</button>
@@ -238,7 +238,7 @@ export function Settings() {
           Restore from a backup…
           <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={onRestore} />
         </label>
-        {restoreMsg && <p className="note" style={{ marginTop: 6 }}>{restoreMsg}</p>}
+        {restoreMsg && <p className="note" role="status" style={{ marginTop: 6 }}>{restoreMsg}</p>}
       </div>
 
       <div className="spacer-v" />

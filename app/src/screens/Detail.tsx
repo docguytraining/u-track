@@ -23,14 +23,14 @@ const Row = ({ left, right, onDelete }: { left: React.ReactNode; right: string; 
       <span className="spacer" />
       {confirm ? (
         <>
-          <button className="ghost" style={{ minHeight: 32, padding: '2px 10px', color: 'var(--warn)' }} onClick={onDelete}>Delete</button>
-          <button className="ghost" style={{ minHeight: 32, padding: '2px 10px' }} onClick={() => setConfirm(false)}>Cancel</button>
+          <button className="ghost" style={{ minHeight: 44, padding: '4px 12px', color: 'var(--warn)' }} onClick={onDelete}>Delete</button>
+          <button className="ghost" style={{ minHeight: 44, padding: '4px 12px' }} onClick={() => setConfirm(false)}>Cancel</button>
         </>
       ) : (
         <>
           <b>{right}</b>
           {onDelete && (
-            <button className="ghost" aria-label="Delete this entry" style={{ minHeight: 32, padding: '2px 8px', marginLeft: 8, color: 'var(--muted)' }} onClick={() => setConfirm(true)}>✕</button>
+            <button className="ghost" aria-label="Delete this entry" style={{ minHeight: 44, padding: '4px 12px', marginLeft: 8, color: 'var(--muted)' }} onClick={() => setConfirm(true)}><span aria-hidden="true">✕</span></button>
           )}
         </>
       )}
@@ -84,10 +84,10 @@ export function Detail() {
         {sorted.length > 0 && <p className="note">Tap ✕ to remove anything logged by accident.</p>}
         {sorted.length === 0 && !undo && <p className="note">Nothing logged yet.</p>}
         {undo && (
-          <div className="logline" style={{ borderLeft: '3px solid var(--accent)', paddingLeft: 10 }}>
+          <div className="logline" role="status" style={{ borderLeft: '3px solid var(--accent)', paddingLeft: 10 }}>
             <span>Deleted.</span>
             <span className="spacer" />
-            <button className="ghost" style={{ minHeight: 32, padding: '2px 12px', color: 'var(--accent)' }} onClick={() => { restoreEntry(undo); setUndo(null); }}>Undo</button>
+            <button className="ghost" style={{ minHeight: 44, padding: '4px 12px', color: 'var(--accent)' }} onClick={() => { restoreEntry(undo); setUndo(null); }}>Undo</button>
           </div>
         )}
         {sorted.map((e) => {
