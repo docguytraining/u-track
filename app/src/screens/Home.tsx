@@ -2,7 +2,10 @@ import { useStore } from '../store';
 import { Icon } from '../icons';
 
 export function Home() {
-  const { measuredDay, setMeasuredDay, navigate, enabledModules } = useStore();
+  const { measuredDay, setMeasuredDay, navigate, enabledModules, checkins } = useStore();
+  // A gentle weekly nudge — surfaces only when it's been a week, never nags in between.
+  const last = checkins[checkins.length - 1];
+  const checkinDue = !last || Date.now() - last.at > 7 * 86_400_000;
 
   return (
     <div className="screen">
@@ -25,6 +28,12 @@ export function Home() {
       <button className="big center block" onClick={() => navigate('morning')}><Icon name="morning" /> Morning check-in</button>
 
       <div className="spacer-v" />
+
+      {checkinDue && (
+        <button className="ghost block center" style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => navigate('checkin')}>
+          Weekly check-in — how’s it affecting you?
+        </button>
+      )}
 
       {/* Everything else is out of the way. */}
       <div className="footer-actions">
