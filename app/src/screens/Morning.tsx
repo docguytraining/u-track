@@ -20,7 +20,8 @@ const bedtimeFor = (h: number) => {
 };
 
 export function Morning() {
-  const { coreQuestions, gatewayQuestions, logNight, logChange, navigate, products, entries, traits } = useStore();
+  const { coreQuestions, gatewayQuestions, logNight, logChange, logVoid, navigate, products, entries, traits, enabledModules } = useStore();
+  const usesProtection = enabledModules.includes('protection');
   // Only the instrument-tied questions are on the fast path; the rest wait behind
   // "Track anything else?" — the more we ask up front, the less gets answered.
   const core = coreQuestions('morning');
@@ -30,6 +31,8 @@ export function Morning() {
   const [riseHour, setRiseHour] = useState(7);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [firstVoidMl, setFirstVoidMl] = useState<number | null>(null);
+  const [firstDest, setFirstDest] = useState(''); // where the first void after rising went
+  const [overnightMl, setOvernightMl] = useState<number | null>(null); // the weighed overnight product
   const [showMore, setShowMore] = useState(false);
 
   const bedTs = bedtimeFor(bedHour);
@@ -49,16 +52,23 @@ export function Morning() {
   const showTrips = loggedCount > 0 || wokeAnswer;
   const total = answers.nightVoids ?? String(loggedCount);
 
+  // Non-protection people always void in the toilet; protection users pick where.
+  const firstToilet = !usesProtection || firstDest === 'Toilet';
+
   const set = (q: string, v: string) => setAnswers((a) => ({ ...a, [q]: v }));
   const save = () => {
-    if (wet) {
-      // Overnight urine went into the product → record it as a change near rising, where
-      // it counts toward NUV via the weighed-volume path — NOT as a phantom toilet void.
-      if (firstVoidMl != null) logChange({ productId: products[0]?.id ?? null, volumeMl: firstVoidMl, answers: {}, at: riseTs + 5 * 60_000 });
-      logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: null, answers: { nightVoids: total, ...answers } });
-    } else {
-      logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: firstVoidMl, answers: { nightVoids: total, ...answers } });
+    // The protection you woke up in, weighed → a change near rising. Its fluid (including a
+    // first void that went *into* it) lives here, so it's never also counted as a volume.
+    if (wet && usesProtection && overnightMl != null) {
+      logChange({ productId: products[0]?.id ?? null, volumeMl: overnightMl, answers: {}, at: riseTs + 5 * 60_000 });
     }
+    // A first void that went into the product (after getting up) is a volumeless product
+    // void — its fluid is in the weight above.
+    if (usesProtection && firstDest === 'Into protection') {
+      logVoid({ where: 'product', productId: products[0]?.id ?? null, answers: { firstMorning: 'yes' }, at: riseTs + 10 * 60_000 });
+    }
+    // The measured toilet first-morning void rides through logNight so NUV/NPi pick it up.
+    logNight({ bedtime: bedTs, rising: riseTs, firstVoidVolumeMl: firstToilet ? firstVoidMl : null, answers: { nightVoids: total, ...answers } });
     navigate('home');
   };
 
@@ -122,20 +132,37 @@ export function Morning() {
       )}
 
       <div className="hr" />
-      {/* The first-morning volume — a toilet void on a dry night, the weighed product on a wet one. */}
+
+      {/* Overnight output: the protection you woke up in, weighed → a change. This is a
+          SEPARATE thing from the first-morning void, which happens after you get up. */}
+      {wet && usesProtection && (
+        <div className="field">
+          <label>The protection you woke up in</label>
+          <p className="note" style={{ marginTop: -2 }}>Weigh it for the overnight volume — the number that powers the night report.</p>
+          <VolumeField valueMl={overnightMl} onChange={setOvernightMl} products={products} />
+        </div>
+      )}
+
+      {/* First void after getting up — the single most useful number. It can land in the
+          toilet OR the product even on a wet morning, so we ask where before assuming. */}
       <div className="field">
-        {wet ? (
+        <label>First void after getting up</label>
+        {usesProtection && (
+          <OptionGroup
+            question={{ id: 'firstDest', surface: 'morning', coreEligible: false, priority: 0, prompt: 'Where did it go?', options: ['Toilet', 'Into protection', 'Not yet'] }}
+            value={firstDest}
+            onChange={setFirstDest}
+          />
+        )}
+        {firstToilet && (
           <>
-            <label>How wet was your protection?</label>
-            <p className="note" style={{ marginTop: -2 }}>Weigh it for the overnight volume — the number that powers the night report.</p>
-          </>
-        ) : (
-          <>
-            <label>First morning void</label>
-            <p className="note" style={{ marginTop: -2 }}>The single most useful number in the whole chart.</p>
+            <p className="note" style={{ marginTop: -2 }}>How much? — the single most useful number in the whole chart.</p>
+            <VolumeField valueMl={firstVoidMl} onChange={setFirstVoidMl} products={products} />
           </>
         )}
-        <VolumeField valueMl={firstVoidMl} onChange={setFirstVoidMl} products={products} />
+        {firstDest === 'Into protection' && (
+          <p className="note" style={{ marginTop: -2 }}>Counted as a void — its volume is already in the weight above, so we don’t double-count it.</p>
+        )}
       </div>
 
       {gatewayShown.length > 0 && !showMore && (
