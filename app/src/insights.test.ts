@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, unnoticedLosses, rapidSaturation, minuteOfDayStr } from './insights';
+import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, unnoticedLosses, rapidSaturation, minuteOfDayStr, lastUsedProductId } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, ChangeEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -56,6 +56,33 @@ describe('wettingsOf / leaksOf (attribute-based)', () => {
     const entries = [v(noon), leak({ leakSeverity: 'Damp' }), wetting(noon + H)];
     expect(leaksOf(entries)).toHaveLength(1);
     expect(leaksOf(entries)[0]!.leaked).toBe(true);
+  });
+});
+
+describe('lastUsedProductId', () => {
+  const wettingP = (at: number, productId: string | null): VoidEntry =>
+    ({ kind: 'void', id: `w${at}`, at, where: 'product', leaked: false, volumeMl: null, size: null, productId, answers: {} });
+  const changeP = (at: number, productId: string | null): ChangeEntry =>
+    ({ kind: 'change', id: `c${at}`, at, productId, volumeMl: null, answers: {} });
+
+  it('returns the product from the most recent event that carried one', () => {
+    const entries = [wettingP(noon, 'p1'), changeP(noon + H, 'p2'), wettingP(noon + 2 * H, 'p3')];
+    expect(lastUsedProductId(entries)).toBe('p3');
+  });
+
+  it('is time-based, not array-order-based', () => {
+    const entries = [wettingP(noon + 2 * H, 'late'), wettingP(noon, 'early')];
+    expect(lastUsedProductId(entries)).toBe('late');
+  });
+
+  it('skips events with no product and ignores other entry kinds', () => {
+    const entries = [changeP(noon, 'p1'), v(noon + H), wettingP(noon + 2 * H, null), drink(noon + 3 * H)];
+    expect(lastUsedProductId(entries)).toBe('p1');
+  });
+
+  it('returns null when nothing has ever carried a product', () => {
+    expect(lastUsedProductId([v(noon), leak({ leakSeverity: 'Damp' })])).toBeNull();
+    expect(lastUsedProductId([])).toBeNull();
   });
 });
 

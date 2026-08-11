@@ -44,6 +44,21 @@ export const leaksOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.le
 export const wettingsOf = (e: readonly LogEntry[]) => voidsOf(e).filter((v) => v.where === 'product' || v.where === 'both');
 
 /**
+ * The product most recently attached to a logged event — a wetting into protection, or a
+ * change. That's almost always the one still being worn, so a product picker can default to
+ * it instead of the first item in the library, saving the tap of correcting the guess every
+ * time. Null when nothing logged has ever carried a product (the library's first is the only
+ * sensible fallback then). Only voids and changes carry a productId; other kinds are ignored. */
+export function lastUsedProductId(entries: readonly LogEntry[]): string | null {
+  let best: { at: number; id: string } | null = null;
+  for (const e of entries) {
+    if (e.kind !== 'void' && e.kind !== 'change') continue; // only these carry a productId + `at`
+    if (e.productId && (!best || e.at > best.at)) best = { at: e.at, id: e.productId };
+  }
+  return best?.id ?? null;
+}
+
+/**
  * Every involuntary loss of urine — the leak *symptom* a clinician reads as leakage — however
  * it was contained. That is one coin with two sides: caught by protection (a void into a
  * product) and reaching clothing/bed (an escape) are the same event, differing only in
