@@ -32,6 +32,7 @@ export function LogVoid() {
   const [showMore, setShowMore] = useState(false);
 
   const askDest = sometimesMissesToilet(enabledModules, traits);
+  const usesProtection = enabledModules.includes('protection');
   const [dest, setDest] = useState('');
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [leaked, setLeaked] = useState('');
@@ -55,7 +56,9 @@ export function LogVoid() {
       answers,
       at: t,
     });
-    if (intoProduct && changed === 'Yes') logChange({ productId: productId || null, volumeMl: null, answers: fullness ? { fullness } : {}, at: t });
+    // A change can ride along with a toilet void too — "I peed and changed my diaper while
+    // I was in there" is a continent void + a change, not a split "Both".
+    if (changed === 'Yes') logChange({ productId: productId || null, volumeMl: null, answers: fullness ? { fullness } : {}, at: t });
     navigate('home');
   };
 
@@ -151,6 +154,37 @@ export function LogVoid() {
 
           {core.length === 0 && !measuredDay && (
             <p className="note">Your profile keeps the daytime void a pure tap — nothing else to ask.</p>
+          )}
+
+          {/* Peed in the toilet AND changed a product that was wet from earlier — one visit,
+              two events (a continent void + a change), not a split "Both". */}
+          {usesProtection && (
+            <>
+              <OptionGroup
+                question={{ id: 'changed', surface: 'void', coreEligible: false, priority: 0, prompt: 'Did you also change your product while you were there?', options: ['No', 'Yes'] }}
+                value={changed}
+                onChange={setChanged}
+              />
+              {changed === 'Yes' && (
+                <>
+                  {products.length > 1 && (
+                    <div className="field">
+                      <label>Which product did you remove? — optional</label>
+                      <div className="chips">
+                        {products.map((p) => (
+                          <button key={p.id} className={productId === p.id ? 'selected' : ''} onClick={() => setProductId(p.id)}>{p.name}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <OptionGroup
+                    question={{ id: 'fullness', surface: 'void', coreEligible: false, priority: 0, prompt: 'How full was it?', options: ['Light', 'Moderate', 'Heavy', 'Saturated'] }}
+                    value={fullness}
+                    onChange={setFullness}
+                  />
+                </>
+              )}
+            </>
           )}
 
           {gateway.length > 0 && !showMore && (
