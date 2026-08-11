@@ -37,8 +37,19 @@ jobs:
         run: npm --prefix app test
 
       # Produce app/dist, which firebase.json serves as the hosting root.
+      # Vite inlines VITE_* at build time. The Firebase *web* config is NOT secret (it
+      # only identifies the project; real protection is Firestore rules + Auth), so the
+      # public identifiers are inline here and the rest come from repo Variables. Without
+      # these the build ships with no cloud and sign-in says "cloud not configured".
       - name: Build app
         run: npm --prefix app run build
+        env:
+          VITE_FIREBASE_PROJECT_ID: u-track-prod
+          VITE_FIREBASE_AUTH_DOMAIN: u-track-prod.firebaseapp.com
+          VITE_FIREBASE_STORAGE_BUCKET: u-track-prod.appspot.com
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
 
       - name: Deploy to Firebase Hosting (live)
         uses: FirebaseExtended/action-hosting-deploy@v0
