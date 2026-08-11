@@ -1,10 +1,10 @@
-# u-flow
+# u-track
 
 **A bladder diary that treats you like an adult.**
 
-👉 **[Try it — u-flow.fyi](https://u-flow.fyi)** · free · nothing to install · works in any browser (and installs as an app if you want)
+👉 **[Try it — u-track.fyi](https://u-track.fyi)** · free · nothing to install · works in any browser (and installs as an app if you want)
 
-u-flow turns the vague conversation you dread at the doctor's office — *"how often? …sometimes? a lot? I don't know"* — into real, timestamped data you can hand your provider. It's a private, matter-of-fact diary for anyone living with urinary frequency, urgency, leaks, nighttime symptoms, or incontinence of any cause.
+u-track turns the vague conversation you dread at the doctor's office — *"how often? …sometimes? a lot? I don't know"* — into real, timestamped data you can hand your provider. It's a private, matter-of-fact diary for anyone living with urinary frequency, urgency, leaks, nighttime symptoms, or incontinence of any cause.
 
 It is **not** a diagnostic tool. It's a **trend tracker**: it records what happened and shows you your own patterns, so you walk into an appointment with evidence instead of a guess.
 
@@ -12,7 +12,7 @@ It is **not** a diagnostic tool. It's a **trend tracker**: it records what happe
 
 ## Why it's different
 
-Most tracking apps are either clinical spreadsheets or cheerful habit-streak toys. Incontinence deserves neither. u-flow is built on a few firm principles:
+Most tracking apps are either clinical spreadsheets or cheerful habit-streak toys. Incontinence deserves neither. u-track is built on a few firm principles:
 
 - **Describe, don't judge.** Every screen states a fact about what happened — no verdicts. A wet night and a dry night are recorded exactly the same way, like noting the weather. No shame, and no cheerleading either (a 🎉 for a dry night would quietly make a wet one a failure).
 - **Plain, clinical language — never a confession.** It uses the words your doctor uses, and it never asks you to justify a void or admit you did something "on purpose."
@@ -39,7 +39,7 @@ A report you can read — and **print for an appointment**:
 
 ## ⚠️ Medical disclaimer
 
-u-flow is a **personal tracking aid, not a medical device.** It does **not** diagnose, treat, cure, or prevent any condition, and it does **not** provide medical advice.
+u-track is a **personal tracking aid, not a medical device.** It does **not** diagnose, treat, cure, or prevent any condition, and it does **not** provide medical advice.
 
 - Nothing here is a substitute for professional medical care. Always seek the advice of a qualified healthcare provider with any questions about your health, and never disregard or delay that advice because of something you saw in this app.
 - Some symptoms need prompt attention, not a trend line — **blood in your urine, pain or burning when you urinate, fever, or a sudden change** all warrant contacting a healthcare professional.
@@ -85,4 +85,4 @@ npm --prefix app run build # production build → app/dist
 
 ## License
 
-[MIT](LICENSE) © the u-flow contributors.
+[MIT](LICENSE) © the u-track contributors.
