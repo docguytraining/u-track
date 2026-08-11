@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useStore, type ProductUsage } from '../store';
+import { useStore, type ProductUsage, type MedTiming, MED_TIMINGS } from '../store';
 import { Topbar } from '../ui';
 import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
@@ -13,7 +13,7 @@ const USAGE_OPTS: { value: ProductUsage; label: string }[] = [
 ];
 
 export function Settings() {
-  const { onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins, user, navigate, reset, loadSample, restoreBackup, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, setUnits, signOut } = useStore();
+  const { onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins, meds, user, navigate, reset, loadSample, restoreBackup, rerunOnboarding, addProduct, updateProduct, removeProduct, removeDrinkType, addDrinkType, addMed, removeMed, setUnits, signOut } = useStore();
   const [restoreMsg, setRestoreMsg] = useState('');
   const today = new Date().toISOString().slice(0, 10);
 
@@ -37,6 +37,15 @@ export function Settings() {
   const [name, setName] = useState('');
   const [dry, setDry] = useState('');
   const [usage, setUsage] = useState<ProductUsage>('both');
+  const [medName, setMedName] = useState('');
+  const [medTiming, setMedTiming] = useState<MedTiming>('Morning');
+
+  const addMedication = () => {
+    if (!medName.trim()) return;
+    addMed(medName.trim(), medTiming);
+    setMedName('');
+    setMedTiming('Morning');
+  };
 
   // Pick a type first → weight, a starting name, and a default usage auto-fill.
   const pickTier = (t: { name: string; grams: number; usage: ProductUsage }) => {
@@ -180,6 +189,37 @@ export function Settings() {
       </div>
 
       <div className="card">
+        <h3>Medications</h3>
+        <div className="sub" style={{ marginTop: 2 }}>
+          Optional. Some medications — a water pill (diuretic), for instance — change how much
+          you go and when. Noting the timing gives whoever reads your data the context to tell
+          medication from your bladder. The app just records them; it never advises on them.
+        </div>
+        {meds.length > 0 && (
+          <div className="list" style={{ marginTop: 12 }}>
+            {meds.map((m) => (
+              <div className="logline" key={m.id}>
+                <span>{m.name}</span>
+                <span className="spacer" />
+                <b style={{ color: 'var(--muted)', fontWeight: 500 }}>{m.timing}</b>
+                <button className="ghost danger" style={{ minHeight: 40, padding: '0 10px', marginLeft: 8 }} onClick={() => removeMed(m.id)}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <input className="numinput" style={{ flex: 2 }} placeholder="Medication name" value={medName}
+            onChange={(e) => setMedName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addMedication(); }} />
+        </div>
+        <div className="chips" style={{ marginTop: 8 }}>
+          {MED_TIMINGS.map((t) => (
+            <button key={t} className={medTiming === t ? 'selected' : ''} onClick={() => setMedTiming(t)}>{t}</button>
+          ))}
+        </div>
+        <button className="block center" style={{ marginTop: 8 }} onClick={addMedication} disabled={!medName.trim()}>Add medication</button>
+      </div>
+
+      <div className="card">
         <h3>Your data</h3>
         <div className="sub" style={{ marginTop: 6 }}>
           {entries.length} events · {user ? 'synced to your account' : 'on this device only — sign in to save'}.
@@ -191,7 +231,7 @@ export function Settings() {
           Export events (CSV)
         </button>
         <button className="block center" style={{ marginTop: 8 }} disabled={entries.length === 0}
-          onClick={() => download(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins }, new Date().toISOString()), null, 2), 'application/json')}>
+          onClick={() => download(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins, meds }, new Date().toISOString()), null, 2), 'application/json')}>
           Download backup (JSON)
         </button>
         <label className="ghost block center" style={{ marginTop: 8, cursor: 'pointer', display: 'block', padding: '12px' }}>
