@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { lastUsedProductId } from '../insights';
 import { Topbar, OptionGroup, VolumeField, WhenField } from '../ui';
 
 /**
@@ -17,12 +18,14 @@ const WHERE = ['Toilet', 'Into protection', 'Clothing or bed'];
 const SIZES = ['Dribble', 'Small', 'Moderate', 'Large', 'Full'];
 
 export function LogEvent() {
-  const { coreQuestions, measuredDay, logEvent, navigate, products, enabledModules } = useStore();
+  const { coreQuestions, measuredDay, logEvent, navigate, products, enabledModules, entries } = useStore();
   const [where, setWhere] = useState('');
   const [size, setSize] = useState('');
   const [volumeMl, setVolumeMl] = useState<number | null>(null);
   const [escaped, setEscaped] = useState('');
-  const [productId, setProductId] = useState(products[0]?.id ?? '');
+  // Default to the product last logged — almost certainly the one still on — so a wetting
+  // doesn't reopen on the wrong item every time; fall back to the library's first.
+  const [productId, setProductId] = useState(lastUsedProductId(entries) ?? products[0]?.id ?? '');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [at, setAt] = useState<number | null>(null);
   const [more, setMore] = useState(false);
@@ -45,7 +48,9 @@ export function LogEvent() {
   // What "add more" would show for this where × size. A dribble into protection has nothing.
   const escapeQ = isProduct && !dribble;
   const triggerCell = (isProduct || isClothing) && !dribble && triggerQ;
-  const urgencyCell = isToilet && !dribble && urgencyQ;
+  // Urgency belongs on a wetting too, not just a toilet void: a strong urge is often the whole
+  // reason it landed in the product instead of the toilet, so ask it whenever the urge was felt.
+  const urgencyCell = (isToilet || isProduct) && !dribble && urgencyQ;
   const emptyingCell = isToilet && dribble && emptyingQs.length > 0; // a toilet dribble → emptying signal
   const measuredVolumeCell = isToilet && measuredDay; // real mL only during the 24-hour check
   const hasMore = escapeQ || triggerCell || urgencyCell || emptyingCell || measuredVolumeCell;
