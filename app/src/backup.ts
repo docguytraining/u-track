@@ -83,15 +83,32 @@ export function download(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+/** True when the app is running as an installed/home-screen PWA rather than a browser tab. */
+function isStandaloneApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.matchMedia?.('(display-mode: standalone)').matches === true ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Get the export file off the device. On an installed iOS PWA the `<a download>` trick is a
+ * Get the export file off the device. In an installed iOS PWA the `<a download>` trick is a
  * dead end — WebKit ignores the download attribute in standalone mode, so the file has no way
- * out. The Web Share API (with a File) is the path that works there: it opens the OS Share
- * Sheet, letting the user save to Files, mail it to their clinician, etc. Where file-sharing
- * isn't supported (most desktops), fall back to a normal download.
+ * out. There the Web Share API (with a File) works: it opens the OS Share Sheet, letting the
+ * user save to Files, mail it to their clinician, etc.
+ *
+ * We only prefer sharing in the standalone app. In a normal browser tab — including desktop
+ * Chrome/Edge, where `canShare({files})` is also true — a plain download is the expected,
+ * reliable behavior, and routing through the Share Sheet there would break the download users
+ * get today (and silently no-op if they dismiss the sheet). So: share only where download fails.
  */
 export async function shareOrDownload(filename: string, content: string, mime: string) {
-  if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
+  if (isStandaloneApp() && typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
     const file = new File([content], filename, { type: mime });
     if (navigator.canShare({ files: [file] })) {
       try {

@@ -142,6 +142,9 @@ export type LogEntry = VoidEntry | NightEntry | ChangeEntry | DrinkEntry;
 export function normalizeEntries(raw: readonly unknown[]): LogEntry[] {
   const out: LogEntry[] = [];
   for (const item of raw ?? []) {
+    // Skip anything that isn't a real object — a null or primitive slipped in by a truncated
+    // write or a hand-edited backup would otherwise throw on `e.at` and white-screen the app.
+    if (!item || typeof item !== 'object') continue;
     const e = item as Record<string, unknown>;
     const at = e.at as number;
     const answers = (e.answers as Record<string, string>) ?? {};
@@ -288,14 +291,26 @@ function trackingModules(enabled: string[]): TrackingModule[] {
 function bootstrap(): State {
   const local = loadLocalDiary();
   if (!local) return initial;
-  const s = applyPersisted(initial, local);
-  // A returning guest who already onboarded should land on Home, not the setup flow.
-  return { ...s, screen: s.onboarded ? 'home' : 'onboarding' };
+  try {
+    const s = applyPersisted(initial, local);
+    // A returning guest who already onboarded should land on Home, not the setup flow.
+    return { ...s, screen: s.onboarded ? 'home' : 'onboarding' };
+  } catch {
+    // bootstrap() runs inside render (useState initializer); if a corrupt blob slips past the
+    // field guards and throws, drop it rather than white-screen on every reload with no way out.
+    clearLocalDiary();
+    return initial;
+  }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(bootstrap);
   const hydrating = useRef(false);
+  // Set while a cloud sign-out is in flight (until the reload wipes everything). Firebase's
+  // signOut fires onAuth(null), which leaves the ex-user's entries in memory with user===null —
+  // without this guard the guest-save effect would write that diary back to the shared local
+  // key, racing the reload and re-creating the exact shared-device leak sign-out prevents.
+  const signingOut = useRef(false);
 
   // Auth: subscribe once. On sign-in, load the user's cloud doc (or seed it from the
   // current local state on first sign-in). In guest mode, just mark auth ready.
@@ -350,7 +365,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // OS reclaiming an installed PWA. Signed-in data goes to the cloud instead (effect above),
   // and is cleared from here on sign-in, so the two never both own the same diary.
   useEffect(() => {
-    if (state.user || !state.authReady || hydrating.current) return;
+    if (state.user || !state.authReady || hydrating.current || signingOut.current) return;
     const snapshot = Object.fromEntries(PERSIST_KEYS.map((k) => [k, state[k]]));
     const t = setTimeout(() => saveLocalDiary(snapshot), 400);
     return () => clearTimeout(t);
@@ -405,6 +420,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // active we reload to re-init a fresh instance; local-only mode just resets in place.
       signOut: () => {
         clearLocalDiary();
+        // Cloud path reloads after wiping caches; block the guest-save effect from re-persisting
+        // the ex-user's in-memory diary in the window before that reload. (Local-only mode has no
+        // reload, so it must keep saving — don't set the guard there.)
+        if (cloudEnabled && typeof window !== 'undefined') signingOut.current = true;
         void signOutUser().finally(() => {
           if (cloudEnabled && typeof window !== 'undefined') window.location.reload();
           else setState(() => ({ ...initial, authReady: true }));
