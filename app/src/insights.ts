@@ -115,6 +115,41 @@ export const humanize = (key: string) => {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 };
 
+/** One hour of the day, aggregated across every logged day. */
+export interface HourBucket {
+  /** 0–23, local hour. */
+  hour: number;
+  /** Bladder emptyings that hour (toilet or into a product), not counting leaks. */
+  voids: number;
+  /** Voids where urine escaped that hour. */
+  leaks: number;
+}
+
+/**
+ * The day's rhythm: every void folded onto a 24-hour clock so the *time of day* things
+ * happen becomes visible across all logged days at once. "When does it happen — mornings,
+ * after lunch, overnight?" is one of the first questions a clinician asks, and a single day's
+ * chart can't answer it. Purely descriptive: it shows the pattern, it never judges it.
+ */
+export function hourlyRhythm(entries: readonly LogEntry[]): {
+  buckets: HourBucket[];
+  days: number;
+  total: number;
+  peak: HourBucket | null;
+} {
+  const buckets: HourBucket[] = Array.from({ length: 24 }, (_, hour) => ({ hour, voids: 0, leaks: 0 }));
+  const days = new Set<string>();
+  for (const v of voidsOf(entries)) {
+    const h = new Date(v.at).getHours();
+    days.add(dayKeyOf(v.at));
+    if (v.leaked) buckets[h]!.leaks++;
+    else buckets[h]!.voids++;
+  }
+  const total = buckets.reduce((s, b) => s + b.voids + b.leaks, 0);
+  const peak = total ? buckets.reduce((a, b) => (b.voids + b.leaks > a.voids + a.leaks ? b : a)) : null;
+  return { buckets, days: days.size, total, peak };
+}
+
 /** One calendar day's entries, for the frequency-volume chart and multi-day trends. */
 export interface DayGroup {
   day: string; // YYYY-MM-DD (local)

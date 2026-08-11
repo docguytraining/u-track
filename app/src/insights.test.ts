@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr } from './insights';
+import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -150,6 +150,34 @@ describe('tally / share', () => {
   it('share counts hits over voids that answered', () => {
     const voids = [v(1, { stream: 'Weak' }), v(2, { stream: 'Weak' }), v(3, { stream: 'Strong' }), v(4, {})];
     expect(share(voids, 'stream', ['Weak', 'Dribble'])).toEqual({ hit: 2, of: 3 });
+  });
+});
+
+describe('hourlyRhythm', () => {
+  // Local-time construction so getHours() is deterministic regardless of the test machine's TZ.
+  const atHour = (dayOffset: number, hour: number) => new Date(2026, 7, 5 + dayOffset, hour, 0, 0).getTime();
+  const leakAt = (at: number): VoidEntry =>
+    ({ kind: 'void', id: `l${at}`, at, where: null, leaked: true, volumeMl: null, size: null, productId: null, answers: {} });
+
+  it('buckets voids and leaks by hour of day across all days, and finds the peak', () => {
+    const entries = [
+      v(atHour(0, 8)), v(atHour(1, 8)), // two 8am voids, different days
+      v(atHour(0, 14)), leakAt(atHour(0, 14)), leakAt(atHour(1, 14)), // 2pm: one void + two leaks (peak, 3 events)
+    ];
+    const { buckets, days, total, peak } = hourlyRhythm(entries);
+    expect(buckets).toHaveLength(24);
+    expect(buckets[8]).toEqual({ hour: 8, voids: 2, leaks: 0 });
+    expect(buckets[14]).toEqual({ hour: 14, voids: 1, leaks: 2 });
+    expect(days).toBe(2);
+    expect(total).toBe(5);
+    expect(peak!.hour).toBe(14); // 3 events at 2pm > 2 at 8am
+  });
+
+  it('is empty and peak-less with no voids', () => {
+    const r = hourlyRhythm([drink(noon)]);
+    expect(r.total).toBe(0);
+    expect(r.peak).toBeNull();
+    expect(r.buckets.every((b) => b.voids === 0 && b.leaks === 0)).toBe(true);
   });
 });
 
