@@ -23,6 +23,14 @@ export function Chart() {
   const [frame, setFrame] = useState<number | 'all'>(3);
   const [details, setDetails] = useState(false);
 
+  // window.print() is a silent no-op in a home-screen (standalone) PWA on iOS — a documented
+  // WebKit limitation. Detect that mode so the button can offer a working alternative instead
+  // of appearing to do nothing. Elsewhere (desktop, Android, in-browser Safari) print works.
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches === true ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true);
+
   // Run the reports over the chosen time frame only.
   const startToday = new Date();
   startToday.setHours(0, 0, 0, 0);
@@ -61,6 +69,13 @@ export function Chart() {
             <span><b>Include full detail</b><div className="sub">Every void, time-stamped</div></span>
           </button>
           <button className="primary block center" style={{ marginTop: 10 }} onClick={() => window.print()}>Print / Save PDF</button>
+          {standalone && (
+            <p className="note" style={{ marginTop: 8 }}>
+              If nothing happens, your phone is blocking print from the installed app. Open u-track in
+              your browser (Safari or Chrome) to save a PDF — or use “Copy summary for your doctor” on
+              the Report screen and “Export events (CSV)” in Settings, which work anywhere.
+            </p>
+          )}
         </div>
       </div>
 
