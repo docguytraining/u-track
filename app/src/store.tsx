@@ -18,12 +18,37 @@ import {
 import { MODULES, DEFAULT_DRY_WEIGHTS, USAGE_BY_TIER, DEFAULT_DRINK_NAMES, type AppQuestion, type ModuleDef } from './modules';
 import type { Units } from './units';
 import { cloudEnabled, onAuth, db, signInWithGoogle, signOutUser, completeMagicLink } from './firebase';
+import { loadLocalDiary, saveLocalDiary, clearLocalDiary } from './localstore';
 
 /** Fields that persist to Firestore (everything except transient UI/auth state). */
 const PERSIST_KEYS = ['onboarded', 'enabledModules', 'traits', 'products', 'drinkTypes', 'units', 'entries', 'checkins', 'meds'] as const;
 type Persisted = Pick<State, (typeof PERSIST_KEYS)[number]>;
 const pickPersisted = (o: State): Persisted =>
   Object.fromEntries(PERSIST_KEYS.map((k) => [k, o[k]])) as Persisted;
+
+/**
+ * Adopt a persisted-field payload (a cloud doc, a restore file, or the on-device guest blob)
+ * onto a base state, validating each field's type first. A hand-edited or hostile backup — or
+ * a corrupted localStorage entry — can set a field to the wrong shape (e.g. `products` as a
+ * number); copying it verbatim would crash the screens that map over it, and the corruption
+ * would then sync to the cloud and survive reload. Anything malformed is dropped, keeping the
+ * base value. Entries are normalized to the current model (older data may predate it).
+ */
+export function applyPersisted(base: State, data: Record<string, unknown>): State {
+  const next: State = { ...base };
+  const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+  const objArr = (v: unknown): v is Record<string, unknown>[] => Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && !Array.isArray(x));
+  if (typeof data.onboarded === 'boolean') next.onboarded = data.onboarded;
+  if (strArr(data.enabledModules)) next.enabledModules = data.enabledModules;
+  if (data.traits && typeof data.traits === 'object' && !Array.isArray(data.traits)) next.traits = data.traits as Record<string, string>;
+  if (objArr(data.products)) next.products = data.products as unknown as Product[];
+  if (strArr(data.drinkTypes)) next.drinkTypes = data.drinkTypes;
+  if (data.units === 'ml' || data.units === 'oz') next.units = data.units;
+  if (objArr(data.checkins)) next.checkins = data.checkins as unknown as CheckIn[];
+  if (objArr(data.meds)) next.meds = data.meds as unknown as Med[];
+  next.entries = normalizeEntries(Array.isArray(data.entries) ? (data.entries as unknown[]) : base.entries);
+  return next;
+}
 export interface AppUser {
   uid: string;
   name: string | null;
@@ -117,6 +142,9 @@ export type LogEntry = VoidEntry | NightEntry | ChangeEntry | DrinkEntry;
 export function normalizeEntries(raw: readonly unknown[]): LogEntry[] {
   const out: LogEntry[] = [];
   for (const item of raw ?? []) {
+    // Skip anything that isn't a real object — a null or primitive slipped in by a truncated
+    // write or a hand-edited backup would otherwise throw on `e.at` and white-screen the app.
+    if (!item || typeof item !== 'object') continue;
     const e = item as Record<string, unknown>;
     const at = e.at as number;
     const answers = (e.answers as Record<string, string>) ?? {};
@@ -258,9 +286,31 @@ function trackingModules(enabled: string[]): TrackingModule[] {
   }));
 }
 
+/** First render state: a returning guest's on-device diary if present, else the empty start.
+ * If a signed-in user exists, onAuth will hydrate from the cloud and supersede this. */
+function bootstrap(): State {
+  const local = loadLocalDiary();
+  if (!local) return initial;
+  try {
+    const s = applyPersisted(initial, local);
+    // A returning guest who already onboarded should land on Home, not the setup flow.
+    return { ...s, screen: s.onboarded ? 'home' : 'onboarding' };
+  } catch {
+    // bootstrap() runs inside render (useState initializer); if a corrupt blob slips past the
+    // field guards and throws, drop it rather than white-screen on every reload with no way out.
+    clearLocalDiary();
+    return initial;
+  }
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>(initial);
+  const [state, setState] = useState<State>(bootstrap);
   const hydrating = useRef(false);
+  // Set while a cloud sign-out is in flight (until the reload wipes everything). Firebase's
+  // signOut fires onAuth(null), which leaves the ex-user's entries in memory with user===null —
+  // without this guard the guest-save effect would write that diary back to the shared local
+  // key, racing the reload and re-creating the exact shared-device leak sign-out prevents.
+  const signingOut = useRef(false);
 
   // Auth: subscribe once. On sign-in, load the user's cloud doc (or seed it from the
   // current local state on first sign-in). In guest mode, just mark auth ready.
@@ -293,6 +343,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
       hydrating.current = false;
+      // The guest blob (if any) has now been migrated into this account's cloud doc on first
+      // sign-in, or superseded by it on a returning account. Either way the on-device copy is
+      // stale and must not linger for the next person on a shared device — clear it.
+      clearLocalDiary();
     });
   }, []);
 
@@ -305,6 +359,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.user, state.onboarded, state.enabledModules, state.traits, state.products, state.drinkTypes, state.units, state.entries, state.checkins, state.meds]);
+
+  // Persist to this device (debounced) whenever a persisted field changes while signed out.
+  // This is what makes "no account needed" durable: a guest's diary survives reload and the
+  // OS reclaiming an installed PWA. Signed-in data goes to the cloud instead (effect above),
+  // and is cleared from here on sign-in, so the two never both own the same diary.
+  useEffect(() => {
+    if (state.user || !state.authReady || hydrating.current || signingOut.current) return;
+    const snapshot = Object.fromEntries(PERSIST_KEYS.map((k) => [k, state[k]]));
+    const t = setTimeout(() => saveLocalDiary(snapshot), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.user, state.authReady, state.onboarded, state.enabledModules, state.traits, state.products, state.drinkTypes, state.units, state.entries, state.checkins, state.meds]);
 
   const store = useMemo<Store>(() => {
     const voids = state.entries.filter((e): e is VoidEntry => e.kind === 'void');
@@ -353,6 +419,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // signOutUser wipes the on-disk Firestore cache and terminates the DB, so when cloud is
       // active we reload to re-init a fresh instance; local-only mode just resets in place.
       signOut: () => {
+        clearLocalDiary();
+        // Cloud path reloads after wiping caches; block the guest-save effect from re-persisting
+        // the ex-user's in-memory diary in the window before that reload. (Local-only mode has no
+        // reload, so it must keep saving — don't set the guard there.)
+        if (cloudEnabled && typeof window !== 'undefined') signingOut.current = true;
         void signOutUser().finally(() => {
           if (cloudEnabled && typeof window !== 'undefined') window.location.reload();
           else setState(() => ({ ...initial, authReady: true }));
@@ -462,28 +533,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...s, entries: [...s.entries, ...out], measuredDay: true };
         }),
       // Clear all diary data but stay signed in (persisted → also clears the cloud doc).
-      reset: () => setState((s) => ({ ...initial, user: s.user, authReady: true })),
-      restoreBackup: (data) =>
-        setState((s) => {
-          const next: State = { ...s };
-          // Validate each field's type before adopting it. A hand-edited or hostile backup can
-          // set a field to the wrong shape (e.g. products as a number); copying it verbatim
-          // would crash the screens that map over it — and the corruption would then sync to
-          // the cloud and survive reload. Anything malformed is dropped, keeping the current value.
-          const strArr = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
-          const objArr = (v: unknown): v is Record<string, unknown>[] => Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && !Array.isArray(x));
-          if (typeof data.onboarded === 'boolean') next.onboarded = data.onboarded;
-          if (strArr(data.enabledModules)) next.enabledModules = data.enabledModules;
-          if (data.traits && typeof data.traits === 'object' && !Array.isArray(data.traits)) next.traits = data.traits as Record<string, string>;
-          if (objArr(data.products)) next.products = data.products as unknown as Product[];
-          if (strArr(data.drinkTypes)) next.drinkTypes = data.drinkTypes;
-          if (data.units === 'ml' || data.units === 'oz') next.units = data.units;
-          if (objArr(data.checkins)) next.checkins = data.checkins as unknown as CheckIn[];
-          if (objArr(data.meds)) next.meds = data.meds as unknown as Med[];
-          // Bring restored entries up to the current shape (old backups may predate the model).
-          next.entries = normalizeEntries(Array.isArray(data.entries) ? (data.entries as unknown[]) : s.entries);
-          return next;
-        }),
+      // For a guest, also drop the on-device copy immediately.
+      reset: () => { clearLocalDiary(); setState((s) => ({ ...initial, user: s.user, authReady: true })); },
+      restoreBackup: (data) => setState((s) => applyPersisted(s, data)),
       enabledModuleDefs: state.enabledModules.map((m) => MODULES[m]).filter((m): m is ModuleDef => !!m),
       coreQuestions: (surface) =>
         composeCore(trackingModules(state.enabledModules), surface) as AppQuestion[],

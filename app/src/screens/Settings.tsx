@@ -3,7 +3,7 @@ import { useStore, type ProductUsage, type MedTiming, MED_TIMINGS } from '../sto
 import { Topbar } from '../ui';
 import { MODULES, PRODUCT_TIERS, DEFAULT_DRINK_NAMES } from '../modules';
 import { humanize } from '../insights';
-import { eventsToCsv, buildBackup, parseBackup, download } from '../backup';
+import { eventsToCsv, buildBackup, parseBackup, shareOrDownload } from '../backup';
 import { cloudEnabled, usingEmulator } from '../firebase';
 
 const USAGE_OPTS: { value: ProductUsage; label: string }[] = [
@@ -227,12 +227,12 @@ export function Settings() {
         <div className="sub" style={{ marginTop: 6 }}>It’s yours — take it with you. Export it for a spreadsheet or your doctor, or keep a backup so a cleared browser or a new phone never loses your history.</div>
 
         <button className="block center" style={{ marginTop: 10 }} disabled={entries.length === 0}
-          onClick={() => download(`u-track-events-${today}.csv`, eventsToCsv(entries, products), 'text/csv')}>
+          onClick={() => void shareOrDownload(`u-track-events-${today}.csv`, eventsToCsv(entries, products), 'text/csv')}>
           Export events (CSV)
         </button>
         <button className="block center" style={{ marginTop: 8 }} disabled={entries.length === 0}
-          onClick={() => download(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins, meds }, new Date().toISOString()), null, 2), 'application/json')}>
-          Download backup (JSON)
+          onClick={() => void shareOrDownload(`u-track-backup-${today}.json`, JSON.stringify(buildBackup({ onboarded, enabledModules, traits, products, drinkTypes, units, entries, checkins, meds }, new Date().toISOString()), null, 2), 'application/json')}>
+          Download / share backup (JSON)
         </button>
         <label className="ghost block center" style={{ marginTop: 8, cursor: 'pointer', display: 'block', padding: '12px' }}>
           Restore from a backup…

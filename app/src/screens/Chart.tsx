@@ -19,7 +19,7 @@ const DAY = 86_400_000;
 const FRAMES: [string, number | 'all'][] = [['3 days', 3], ['7 days', 7], ['14 days', 14], ['30 days', 30], ['All', 'all']];
 
 export function Chart() {
-  const { entries, units, navigate } = useStore();
+  const { entries, units, navigate, user } = useStore();
   const [frame, setFrame] = useState<number | 'all'>(3);
   const [details, setDetails] = useState(false);
 
@@ -71,9 +71,12 @@ export function Chart() {
           <button className="primary block center" style={{ marginTop: 10 }} onClick={() => window.print()}>Print / Save PDF</button>
           {standalone && (
             <p className="note" style={{ marginTop: 8 }}>
-              If nothing happens, your phone is blocking print from the installed app. Open u-track in
-              your browser (Safari or Chrome) to save a PDF — or use “Copy summary for your doctor” on
-              the Report screen and “Export events (CSV)” in Settings, which work anywhere.
+              If nothing happens, your phone is blocking Save-as-PDF inside the installed app. The
+              reliable way to hand this to your doctor is <b>Copy summary</b> on the Report screen — it
+              copies text you can paste into Messages, Mail or Notes — or <b>Export</b> in Settings.
+              {user
+                ? ' You can also open u-track in a browser and sign in — your data syncs there — then use Save as PDF.'
+                : ' To print from a computer instead, make an account first (Settings → Sign in) so your data can follow you there — on this device the installed app and the browser don’t share storage.'}
             </p>
           )}
         </div>
