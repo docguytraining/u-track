@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, voidClusterPatterns, unnoticedLosses, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern, type ClusterPattern, type UnnoticedLoss } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, voidClusterPatterns, unnoticedLosses, rapidSaturation, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern, type ClusterPattern, type UnnoticedLoss, type RapidSaturation } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol, type Units } from '../units';
 import { Icon } from '../icons';
@@ -150,6 +150,29 @@ function UnnoticedLossCard({ losses, units }: { losses: UnnoticedLoss[]; units: 
   );
 }
 
+/** Protection that keeps saturating fast — a capacity/output conversation. Same descriptive,
+ * provider-pointing voice as the overnight-adequacy card it sits beside. */
+function SaturationCard({ items }: { items: RapidSaturation[] }) {
+  return (
+    <div className="card">
+      <h3>Filling up fast</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        Protection coming back heavy after only a short time — it may not have the capacity for your output.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {items.map((it, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            {it.productName ? <b>{it.productName}</b> : 'A product'} came back heavy within <b>~{it.medianWearH}h</b>, {it.episodes} times.
+          </li>
+        ))}
+      </ul>
+      <div className="sub" style={{ marginTop: 8 }}>
+        Worth asking your provider about higher-capacity protection — or what's driving the volume.
+      </div>
+    </div>
+  );
+}
+
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
   // Evening/bedtime medications are the ones that can shape the night numbers — surface them
@@ -171,6 +194,7 @@ export function Report() {
   const surges = surgePatterns(entries);
   const clusters = voidClusterPatterns(entries);
   const losses = unnoticedLosses(entries, products);
+  const saturation = rapidSaturation(entries, products);
   const has = (m: string) => enabledModules.includes(m);
 
   // A paste-able plain-text summary for a patient-portal message or a phone call with a
@@ -276,6 +300,7 @@ export function Report() {
       {surges.length > 0 && <SurgeCard patterns={surges} />}
       {clusters.length > 0 && <ClusterCard patterns={clusters} units={units} />}
       {losses.length > 0 && <UnnoticedLossCard losses={losses} units={units} />}
+      {saturation.length > 0 && <SaturationCard items={saturation} />}
 
       <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
         {lastCk ? (

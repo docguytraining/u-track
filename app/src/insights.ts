@@ -497,6 +497,47 @@ export function unnoticedLosses(
   return out.sort((a, b) => b.at - a.at);
 }
 
+/** A product that keeps coming back heavy after only a short wear — it's being overwhelmed
+ * faster than it should, which is a "consider higher capacity, or ask why the output is this
+ * high" conversation. Sits alongside the overnight-adequacy (leaky-products) signal. */
+export interface RapidSaturation {
+  productId: string | null;
+  productName?: string;
+  /** How many fast-saturation changes were seen for this product. */
+  episodes: number;
+  /** Typical wear hours before it came back heavy. */
+  medianWearH: number;
+}
+
+/** Products repeatedly saturated within a short wear window (default heavy/soaked within 2h, on
+ * at least 3 changes). Most-frequent first. */
+export function rapidSaturation(
+  entries: readonly LogEntry[],
+  products: readonly Product[],
+  { maxWearMs = 2 * 3_600_000, minEpisodes = 3 }: { maxWearMs?: number; minEpisodes?: number } = {},
+): RapidSaturation[] {
+  const heavy = (c: ChangeEntry) =>
+    c.volumeMl != null ? c.volumeMl >= 300 : ['Heavy', 'Saturated'].includes(c.answers.fullness ?? '');
+  const fast = changesOf(entries).filter((c) => heavy(c) && c.wearMs != null && c.wearMs <= maxWearMs);
+  const byProduct = new Map<string, ChangeEntry[]>();
+  for (const c of fast) {
+    const k = c.productId ?? '';
+    (byProduct.get(k) ?? byProduct.set(k, []).get(k)!).push(c);
+  }
+  const out: RapidSaturation[] = [];
+  for (const [pid, cs] of byProduct) {
+    if (cs.length < minEpisodes) continue;
+    const wearsH = cs.map((c) => c.wearMs! / 3_600_000).sort((a, b) => a - b);
+    out.push({
+      productId: pid || null,
+      productName: products.find((p) => p.id === pid)?.name,
+      episodes: cs.length,
+      medianWearH: Math.round(wearsH[Math.floor(wearsH.length / 2)]! * 10) / 10,
+    });
+  }
+  return out.sort((a, b) => b.episodes - a.episodes);
+}
+
 /** A clock minute-of-day as a readable time, e.g. 305 → "5:05 AM". */
 export const minuteOfDayStr = (min: number) => {
   const h = Math.floor(min / 60) % 24;

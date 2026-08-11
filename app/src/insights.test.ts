@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, unnoticedLosses, minuteOfDayStr } from './insights';
+import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, unnoticedLosses, rapidSaturation, minuteOfDayStr } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, ChangeEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -361,5 +361,24 @@ describe('unnoticedLosses', () => {
     ];
     // Heavy (~300 mL) but 450 logged into it → nothing unnoticed.
     expect(unnoticedLosses([...logged, change(noon, null, 'Heavy', 6 * H)], products)).toHaveLength(0);
+  });
+});
+
+describe('rapidSaturation', () => {
+  const ch = (at: number, fullness: string, wearMs: number): ChangeEntry =>
+    ({ kind: 'change', id: `s${at}`, at, productId: 'p1', volumeMl: null, wearMs, answers: { fullness } });
+  const products = [{ id: 'p1', name: 'Day guard', dryGrams: 20 }];
+
+  it('flags a product repeatedly saturated within a short wear', () => {
+    const entries = [ch(noon, 'Saturated', 1.5 * H), ch(noon + DAY, 'Heavy', 2 * H), ch(noon + 2 * DAY, 'Saturated', 1 * H)];
+    const r = rapidSaturation(entries, products);
+    expect(r).toHaveLength(1);
+    expect(r[0]!.episodes).toBe(3);
+    expect(r[0]!.productName).toBe('Day guard');
+  });
+
+  it('does not flag heavy changes worn a long time, or a one-off', () => {
+    expect(rapidSaturation([ch(noon, 'Saturated', 9 * H), ch(noon + DAY, 'Saturated', 8 * H)], products)).toHaveLength(0); // long wear
+    expect(rapidSaturation([ch(noon, 'Saturated', 1 * H)], products)).toHaveLength(0); // single episode
   });
 });
