@@ -67,7 +67,7 @@ export function LogVoid() {
   return (
     <div className="screen">
       <Topbar title="Log a void" onBack={() => navigate('home')} />
-      <p className="lead">Add a detail if you want — then tap Done to log it.</p>
+      <p className="lead">A void is one trip to empty your bladder — in the toilet or into protection. Add a detail if you want, then tap Done.</p>
 
       {askDest && (
         <OptionGroup

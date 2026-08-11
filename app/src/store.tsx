@@ -175,11 +175,15 @@ interface State {
   user: AppUser | null;
   /** True once the initial auth check has completed (avoids an onboarding flash). */
   authReady: boolean;
+  /** A transient "saved" acknowledgement shown after logging; not persisted. */
+  notice: string | null;
 }
 
 interface Store extends State {
   navigate: (s: Screen) => void;
   openDetail: (key: string) => void;
+  /** Clear the transient save acknowledgement. */
+  dismissNotice: () => void;
   signIn: () => void;
   signOut: () => void;
   completeOnboarding: (modules: string[], traits: Record<string, string>, productTiers: string[]) => void;
@@ -237,6 +241,7 @@ const initial: State = {
   detail: null,
   user: null,
   authReady: false,
+  notice: null,
 };
 
 let seq = 0;
@@ -368,16 +373,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...s, onboarded: true, enabledModules: modules, traits, products: [...s.products, ...created], screen: 'home' };
         }),
       logVoid: ({ where = 'toilet', leaked = false, volumeMl = null, size = null, productId = null, answers, at }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where, leaked, volumeMl, size, productId, answers }] })),
+        setState((s) => ({ ...s, notice: 'Void logged', entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where, leaked, volumeMl, size, productId, answers }] })),
       // The Leak fast-log: a void that escaped, reaching no toilet and no logged product.
       logLeak: (answers, at) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where: null, leaked: true, volumeMl: null, size: null, productId: null, answers }] })),
+        setState((s) => ({ ...s, notice: 'Leak logged', entries: [...s.entries, { kind: 'void', id: id(), at: at ?? Date.now(), where: null, leaked: true, volumeMl: null, size: null, productId: null, answers }] })),
       logChange: ({ productId, volumeMl, answers, at }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
+        setState((s) => ({ ...s, notice: 'Change logged', entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
-        setState((s) => ({ ...s, entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
+        setState((s) => ({ ...s, notice: 'Drink logged', entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       logCheckin: ({ interference, bother }) =>
-        setState((s) => ({ ...s, checkins: [...s.checkins, { id: id(), at: Date.now(), interference, bother }] })),
+        setState((s) => ({ ...s, notice: 'Check-in saved', checkins: [...s.checkins, { id: id(), at: Date.now(), interference, bother }] })),
+      dismissNotice: () => setState((s) => (s.notice == null ? s : { ...s, notice: null })),
       addMed: (name, timing) =>
         setState((s) => ({ ...s, meds: [...s.meds, { id: id(), name, timing }] })),
       removeMed: (mid) => setState((s) => ({ ...s, meds: s.meds.filter((m) => m.id !== mid) })),
@@ -396,7 +402,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             n.firstVoidVolumeMl != null
               ? [{ kind: 'void', id: id(), at: n.rising + 10 * 60_000, where: 'toilet', leaked: false, volumeMl: n.firstVoidVolumeMl, size: null, productId: null, answers: { firstMorning: 'yes' } }]
               : [];
-          return { ...s, entries: [...s.entries, night, ...firstVoid] };
+          return { ...s, notice: 'Morning check-in saved', entries: [...s.entries, night, ...firstVoid] };
         }),
       setMeasuredDay: (on) => setState((s) => ({ ...s, measuredDay: on })),
       addProduct: (name, dryGrams, tier, usage) =>

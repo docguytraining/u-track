@@ -41,12 +41,20 @@ export function Onboarding() {
     return (
       <div className="screen">
         <span className="eyebrow">u-track</span>
-        <h1>Let’s set up your tracking.</h1>
+        <h1>A bladder diary that turns into data for your doctor.</h1>
         <p className="lead">
-          A few quick questions and the app turns on just what fits you — nothing more. You can
-          change it anytime in Settings. Even a little tracking is worth showing a doctor.
+          Tap to log when you go, leak, or drink. u-track turns it into a frequency-volume chart and a
+          plain-English summary you can hand to your clinician — instead of trying to remember it all in
+          the exam room.
         </p>
         <div className="card" style={{ marginTop: 4 }}>
+          <b>Private by design.</b>
+          <div className="sub" style={{ marginTop: 4 }}>
+            Your diary stays on this device. Nothing is uploaded unless you choose to sign in to sync
+            across your phone and tablet.
+          </div>
+        </div>
+        <div className="card">
           <b>Not a medical device.</b>
           <div className="sub" style={{ marginTop: 4 }}>
             u-track helps you record and share bladder-diary data with your clinician. It does not
@@ -55,10 +63,13 @@ export function Onboarding() {
         </div>
         <div className="spacer-v" />
         {import.meta.env.DEV && <p className="note">Dev build · sample data + reset available in Settings.</p>}
-        <p className="note">By continuing, you acknowledge the above and consent to entering health data.</p>
+        <p className="note">
+          A few quick questions set up just what fits you — change it anytime in Settings. By continuing
+          you consent to entering health data.
+        </p>
         <div className="footer-actions">
           <button className="primary block center big" onClick={() => setStep(import.meta.env.DEV ? 'confirm' : 'symptoms')}>
-            I understand — start new
+            Start tracking — no account needed
           </button>
           <button className="ghost block center" onClick={() => navigate('signin')}>
             Already have an account? Log in

@@ -6,7 +6,7 @@
  * language, and some carry connotations that don't fit a clinical tool. The urine
  * events share a droplet motif; the product events share a rounded "pad" motif.
  */
-export type IconName = 'void' | 'drink' | 'leak' | 'wet' | 'change' | 'morning';
+export type IconName = 'void' | 'drink' | 'leak' | 'wet' | 'change' | 'morning' | 'chart' | 'copy';
 
 const GLYPHS: Record<IconName, React.ReactNode> = {
   // Drink — a tapered tumbler with a liquid line.
@@ -47,6 +47,20 @@ const GLYPHS: Record<IconName, React.ReactNode> = {
       <path d="M4 18.5h16" />
       <path d="M7.5 18.5a4.5 4.5 0 0 1 9 0" />
       <path d="M12 6.5V8.3M6.2 9.2l1.2 1.2M17.8 9.2l-1.2 1.2M3.5 14h1.6M18.9 14h1.6" />
+    </>
+  ),
+  // Chart — an axis with three bars (the frequency-volume chart).
+  chart: (
+    <>
+      <path d="M4 20h16" />
+      <path d="M7.5 20v-7M12 20V6M16.5 20v-4" />
+    </>
+  ),
+  // Copy — two overlapping rounded sheets.
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2.5" />
+      <path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" />
     </>
   ),
 };
