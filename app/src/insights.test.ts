@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm } from './insights';
+import { groupByDay, wettingsOf, leaksOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, minuteOfDayStr } from './insights';
 import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
 
 const H = 3_600_000;
@@ -190,5 +190,89 @@ describe('formatters', () => {
   it('durationStr renders hours and minutes', () => {
     expect(durationStr(8 * H + 30 * 60_000)).toBe('8h 30m');
     expect(durationStr(9 * H)).toBe('9h 0m');
+  });
+});
+
+// High-volume episodes and their time-of-day patterns.
+const mv = (at: number, volumeMl: number): VoidEntry =>
+  ({ kind: 'void', id: `mv${at}`, at, where: 'toilet', leaked: false, volumeMl, size: null, productId: null, answers: {} });
+const pv = (at: number, size: string): VoidEntry =>
+  ({ kind: 'void', id: `pv${at}`, at, where: 'product', leaked: false, volumeMl: null, size, productId: null, answers: {} });
+
+describe('voidEffectiveMl', () => {
+  it('prefers a measured volume (not estimated)', () => {
+    expect(voidEffectiveMl(mv(noon, 320))).toEqual({ ml: 320, estimated: false });
+  });
+  it('estimates from reported size when unmeasured', () => {
+    expect(voidEffectiveMl(pv(noon, 'Large'))).toEqual({ ml: 350, estimated: true });
+  });
+  it('estimates a leak from its severity', () => {
+    expect(voidEffectiveMl(leak({ leakSeverity: 'Soaked' }))).toEqual({ ml: 250, estimated: true });
+  });
+  it('is null when there is no volume signal at all', () => {
+    expect(voidEffectiveMl(v(noon))).toBeNull();
+  });
+});
+
+describe('detectVolumeSurges', () => {
+  it('flags voids that clear the threshold within the window', () => {
+    const s = detectVolumeSurges([mv(noon, 250), mv(noon + 30 * 60_000, 250)]);
+    expect(s).toHaveLength(1);
+    expect(s[0]!.totalMl).toBe(500);
+    expect(s[0]!.voids).toBe(2);
+    expect(s[0]!.estimated).toBe(false);
+  });
+  it('does not flag volume that stays under the threshold', () => {
+    expect(detectVolumeSurges([mv(noon, 150), mv(noon + 30 * 60_000, 150)])).toHaveLength(0);
+  });
+  it('does not merge voids more than a window apart', () => {
+    // 250 + 250 but 3h apart → never 400 within any 2h window.
+    expect(detectVolumeSurges([mv(noon, 250), mv(noon + 3 * H, 250)])).toHaveLength(0);
+  });
+  it('uses size estimates and marks the episode estimated', () => {
+    const s = detectVolumeSurges([pv(noon, 'Large'), pv(noon + 20 * 60_000, 'Large')]); // 350+350
+    expect(s).toHaveLength(1);
+    expect(s[0]!.estimated).toBe(true);
+    expect(s[0]!.totalMl).toBe(700);
+  });
+});
+
+describe('surgePatterns', () => {
+  // Two 250 mL voids 30 min apart = one ~500 mL episode; repeat at the same clock time each day.
+  const burstDay = (dayOffset: number, base: number): VoidEntry[] => {
+    const t = base + dayOffset * DAY;
+    return [mv(t, 250), mv(t + 30 * 60_000, 250)];
+  };
+
+  it('calls out an episode recurring at the same time of day', () => {
+    const base = Date.UTC(2026, 7, 5, 5, 0); // ~early morning anchor
+    const entries = [0, 1, 2, 3, 4].flatMap((d) => burstDay(d, base));
+    const pats = surgePatterns(entries);
+    expect(pats).toHaveLength(1);
+    expect(pats[0]!.days).toBe(5);
+    expect(pats[0]!.periodDays).toBe(5);
+    expect(pats[0]!.surges).toHaveLength(5);
+  });
+
+  it('stays silent below the minimum logged days', () => {
+    const base = Date.UTC(2026, 7, 5, 5, 0);
+    const entries = [0, 1].flatMap((d) => burstDay(d, base)); // only 2 days
+    expect(surgePatterns(entries)).toEqual([]);
+  });
+
+  it('does not call a pattern when episodes scatter across the clock', () => {
+    // Three days, each with one episode, but at 5:00, 14:00, 20:00 — no shared time-of-day window.
+    const d0 = Date.UTC(2026, 7, 5, 5, 0);
+    const d1 = Date.UTC(2026, 7, 6, 14, 0);
+    const d2 = Date.UTC(2026, 7, 7, 20, 0);
+    const entries = [d0, d1, d2].flatMap((t) => [mv(t, 250), mv(t + 30 * 60_000, 250)]);
+    expect(surgePatterns(entries)).toEqual([]);
+  });
+});
+
+describe('minuteOfDayStr', () => {
+  it('formats minutes since midnight as a clock time', () => {
+    expect(minuteOfDayStr(0)).toMatch(/12:00/);      // midnight
+    expect(minuteOfDayStr(5 * 60 + 5)).toMatch(/5:05/); // 5:05
   });
 });

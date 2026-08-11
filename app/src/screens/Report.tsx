@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, type HourBucket } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol } from '../units';
 import { Icon } from '../icons';
@@ -73,6 +73,34 @@ function RhythmCard({ buckets, days, total, peak }: { buckets: HourBucket[]; day
   );
 }
 
+/** Recurring high-volume episodes at a consistent time of day. Descriptive, not a diagnosis —
+ * the copy points the person at their provider, matching the rhythm card's voice. */
+function SurgeCard({ patterns }: { patterns: SurgePattern[] }) {
+  const isOvernight = (min: number) => { const h = Math.floor(min / 60); return h >= 22 || h < 6; };
+  const anyEstimated = patterns.some((p) => p.estimated);
+  return (
+    <div className="card">
+      <h3>High-volume episodes</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        A lot passed in a short time (≥{SURGE_THRESHOLD_ML} mL within ~2 hours), recurring at the same time of day.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {patterns.map((p, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            Around <b>{minuteOfDayStr(p.minuteOfDay)}</b> on <b>{p.days}</b> of {p.periodDays} tracked days
+            {isOvernight(p.minuteOfDay) ? ' — overnight; worth mentioning to your provider' : ''}.
+          </li>
+        ))}
+      </ul>
+      {anyEstimated && (
+        <div className="sub" style={{ marginTop: 8 }}>
+          Some volumes are estimated from the size you reported, not measured — log a few measured days for firmer numbers.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
   // Evening/bedtime medications are the ones that can shape the night numbers — surface them
@@ -90,6 +118,7 @@ export function Report() {
   const wettings = wettingsOf(entries);
   const drinks = drinksOf(entries);
   const rhythm = hourlyRhythm(entries);
+  const surges = surgePatterns(entries);
   const has = (m: string) => enabledModules.includes(m);
 
   // A paste-able plain-text summary for a patient-portal message or a phone call with a
@@ -193,6 +222,7 @@ export function Report() {
       </Card>
 
       {rhythm.total >= 3 && <RhythmCard {...rhythm} />}
+      {surges.length > 0 && <SurgeCard patterns={surges} />}
 
       <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
         {lastCk ? (

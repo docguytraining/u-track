@@ -180,6 +180,156 @@ export function groupByDay(entries: readonly LogEntry[]): DayGroup[] {
 }
 const dayKeyOf = (at: number) => new Date(at).toLocaleDateString('en-CA');
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * High-volume episodes and their time-of-day patterns.
+ *
+ * A lot of urine passed in a short span is a clinically significant event (an output
+ * burst); when such events recur at the same time of day across days, that recurrence is
+ * itself the finding — the fingerprint of things like nocturnal polyuria or a timed diuretic
+ * effect. This detects both: the per-day episodes, and any consistent-clock-time pattern.
+ *
+ * Volumes are only measured on measured days, so where a real mL is missing we fall back to a
+ * rough estimate from the self-reported size of a product void (or a leak's severity) — "use
+ * the data we have." Estimates are flagged so the readout can say so. This is descriptive: it
+ * surfaces the pattern for a provider conversation, it doesn't diagnose.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Rough mL for an unmeasured void, from its reported size. Conservative and clearly an
+ * estimate — a relative signal for spotting bursts, not a measured figure. */
+const SIZE_ML: Record<string, number> = { Small: 100, Medium: 200, Large: 350 };
+/** Rough mL for an escape, from its severity. */
+const SEVERITY_ML: Record<string, number> = { Damp: 40, Moderate: 100, Soaked: 250 };
+
+/** A void's effective volume for burst detection: the measured mL, else an estimate from its
+ * reported size or leak severity. Null when there's no volume signal at all. */
+export function voidEffectiveMl(v: VoidEntry): { ml: number; estimated: boolean } | null {
+  if (v.volumeMl != null) return { ml: v.volumeMl, estimated: false };
+  if (v.size && SIZE_ML[v.size] != null) return { ml: SIZE_ML[v.size]!, estimated: true };
+  const sev = v.answers.leakSeverity;
+  if (v.leaked && sev && SEVERITY_ML[sev] != null) return { ml: SEVERITY_ML[sev]!, estimated: true };
+  return null;
+}
+
+/** One high-volume episode: voids inside a short window whose volume clears the threshold. */
+export interface VolumeSurge {
+  /** First void in the episode, epoch ms. */
+  at: number;
+  /** Last void in the episode, epoch ms. */
+  endAt: number;
+  /** Summed (measured + estimated) volume, mL. */
+  totalMl: number;
+  /** How many voids made up the episode. */
+  voids: number;
+  /** True if any component volume was estimated from size/severity rather than measured. */
+  estimated: boolean;
+}
+
+/** A recurring high-volume episode at a consistent time of day. */
+export interface SurgePattern {
+  /** Centre of the recurring window, minutes since local midnight. */
+  minuteOfDay: number;
+  /** Distinct days in the rolling period that had an episode in this window. */
+  days: number;
+  /** Distinct logged days in the rolling period (the denominator). */
+  periodDays: number;
+  /** True if any contributing episode leaned on estimated volumes. */
+  estimated: boolean;
+  /** The episodes that formed the pattern, newest first. */
+  surges: VolumeSurge[];
+}
+
+export const SURGE_WINDOW_MS = 2 * 3_600_000; // "short time" = a 2-hour window
+export const SURGE_THRESHOLD_ML = 400; // a normal void is ~200–300 mL; 400+ concentrated is a burst
+export const SURGE_TOLERANCE_MIN = 60; // "same time of day" = within ±1 hour
+export const SURGE_PERIOD_DAYS = 14; // rolling period: up to two weeks…
+export const SURGE_MIN_DAYS = 3; // …but at least three logged days before we call anything
+
+const DAY_MS = 86_400_000;
+const minuteOfDayOf = (at: number) => { const d = new Date(at); return d.getHours() * 60 + d.getMinutes(); };
+/** Shortest distance between two clock minutes, wrapping across midnight (so 23:30 and 00:30
+ * are 60 min apart, not 1380). */
+const circadianGap = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 1440 - d); };
+
+/** Find every high-volume episode: a rolling window (default 2h) whose voids sum to at least
+ * the threshold. Episodes are non-overlapping — once a window clears, scanning resumes after it. */
+export function detectVolumeSurges(
+  entries: readonly LogEntry[],
+  { windowMs = SURGE_WINDOW_MS, thresholdMl = SURGE_THRESHOLD_ML }: { windowMs?: number; thresholdMl?: number } = {},
+): VolumeSurge[] {
+  const pts = voidsOf(entries)
+    .map((v) => { const e = voidEffectiveMl(v); return e ? { at: v.at, ml: e.ml, estimated: e.estimated } : null; })
+    .filter((p): p is { at: number; ml: number; estimated: boolean } => p != null)
+    .sort((a, b) => a.at - b.at);
+  const surges: VolumeSurge[] = [];
+  let i = 0;
+  while (i < pts.length) {
+    let sum = 0;
+    let estimated = false;
+    let j = i;
+    while (j < pts.length && pts[j]!.at - pts[i]!.at <= windowMs) { sum += pts[j]!.ml; estimated = estimated || pts[j]!.estimated; j++; }
+    if (sum >= thresholdMl) {
+      surges.push({ at: pts[i]!.at, endAt: pts[j - 1]!.at, totalMl: Math.round(sum), voids: j - i, estimated });
+      i = j; // non-overlapping
+    } else {
+      i++;
+    }
+  }
+  return surges;
+}
+
+/** Recurring high-volume episodes at a consistent time of day, over a rolling period (default
+ * up to 14 days, at least 3 logged days). A window is a "pattern" when it holds an episode on
+ * at least half the logged days in the period. Strongest (most days) first; non-overlapping. */
+export function surgePatterns(
+  entries: readonly LogEntry[],
+  opts: { windowMs?: number; thresholdMl?: number; toleranceMin?: number; periodDays?: number; minDays?: number } = {},
+): SurgePattern[] {
+  const { windowMs, thresholdMl, toleranceMin = SURGE_TOLERANCE_MIN, periodDays = SURGE_PERIOD_DAYS, minDays = SURGE_MIN_DAYS } = opts;
+  const all = detectVolumeSurges(entries, { windowMs, thresholdMl });
+  if (!all.length) return [];
+
+  // Rolling period: the window ending on the most recent logged void, spanning up to periodDays.
+  const voids = voidsOf(entries);
+  const anchor = Math.max(...voids.map((v) => v.at));
+  const cutoff = anchor - (periodDays - 1) * DAY_MS;
+  const periodDayCount = new Set(voids.filter((v) => v.at >= cutoff).map((v) => dayKeyOf(v.at))).size;
+  if (periodDayCount < minDays) return [];
+  const required = Math.ceil(periodDayCount / 2);
+
+  const inWindow = all.filter((s) => s.at >= cutoff).map((s) => ({ s, min: minuteOfDayOf(s.at), day: dayKeyOf(s.at) }));
+
+  // Centre a candidate window on each episode's clock time; keep those recurring on ≥ required
+  // distinct days, then greedily take the strongest non-overlapping clusters.
+  const candidates = inWindow.map((c) => {
+    const members = inWindow.filter((o) => circadianGap(c.min, o.min) <= toleranceMin);
+    return { centre: c.min, members, days: new Set(members.map((m) => m.day)).size };
+  });
+  candidates.sort((a, b) => b.days - a.days || b.members.length - a.members.length);
+
+  const patterns: SurgePattern[] = [];
+  const claimed = new Set<VolumeSurge>();
+  for (const c of candidates) {
+    if (c.days < required) continue;
+    if (c.members.some((m) => claimed.has(m.s))) continue;
+    c.members.forEach((m) => claimed.add(m.s));
+    patterns.push({
+      minuteOfDay: c.centre,
+      days: c.days,
+      periodDays: periodDayCount,
+      estimated: c.members.some((m) => m.s.estimated),
+      surges: c.members.map((m) => m.s).sort((a, b) => b.at - a.at),
+    });
+  }
+  return patterns;
+}
+
+/** A clock minute-of-day as a readable time, e.g. 305 → "5:05 AM". */
+export const minuteOfDayStr = (min: number) => {
+  const h = Math.floor(min / 60) % 24;
+  const m = min % 60;
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
 export const timeStr = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 export const dateStr = (at: number) => new Date(at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 export const dayKey = (at: number) => new Date(at).toLocaleDateString('en-CA'); // YYYY-MM-DD local
