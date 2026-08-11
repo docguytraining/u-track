@@ -60,10 +60,10 @@ export function Home() {
         <button className="ghost block center" onClick={() => setMeasuredDay(!measuredDay)}>
           {measuredDay ? 'End measured day' : 'Start a measured day'}
         </button>
-        {!measuredDay && (
+        {measuredDay && (
           <p className="note" style={{ textAlign: 'center', margin: '2px 6px 0' }}>
-            On a measured day you jot a volume for each void — a measuring cup, or weigh your protection.
-            Three of them gives your doctor a proper frequency-volume chart.
+            Measured day on — jot a volume for each void (a measuring cup, or weigh your protection).
+            Three measured days gives your doctor a proper frequency-volume chart.
           </p>
         )}
       </div>
