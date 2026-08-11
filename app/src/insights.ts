@@ -445,6 +445,58 @@ export function voidClusterPatterns(
   });
 }
 
+/** Rough mL a change represents, from how full it felt (when it wasn't weighed). */
+const FULLNESS_ML: Record<string, number> = { Light: 40, Moderate: 150, Heavy: 300, Saturated: 500 };
+
+/** A change that came back far wetter than what was logged into it — the derived unnoticed-loss
+ * signal. No question asks "did you feel it": if the product absorbed much more than you logged,
+ * the difference is urine you didn't notice. */
+export interface UnnoticedLoss {
+  at: number;
+  /** Volume the product held (weighed, else estimated from fullness). */
+  absorbedMl: number;
+  /** Volume actually logged into it during the wear window. */
+  loggedMl: number;
+  /** absorbedMl − loggedMl — the unaccounted volume. */
+  shortfallMl: number;
+  /** The wear window used, ms (recorded, or the capped gap since the last change). */
+  wearMs: number | null;
+  productName?: string;
+}
+
+/** Changes where the product held far more than was logged into it over the wear window — a
+ * signal of losses the user didn't feel. Flags only a real shortfall (default ≥150 mL, and
+ * under half the absorbed volume logged), newest first. */
+export function unnoticedLosses(
+  entries: readonly LogEntry[],
+  products: readonly Product[],
+  { minShortfallMl = 150, maxLoggedFraction = 0.5 }: { minShortfallMl?: number; maxLoggedFraction?: number } = {},
+): UnnoticedLoss[] {
+  const changes = changesOf(entries).slice().sort((a, b) => a.at - b.at);
+  const wettings = wettingsOf(entries);
+  const out: UnnoticedLoss[] = [];
+  let prevAt: number | null = null;
+  for (const c of changes) {
+    const absorbedMl = c.volumeMl ?? FULLNESS_ML[c.answers.fullness ?? ''] ?? 0;
+    const wearMs = c.wearMs ?? (prevAt != null ? Math.min(c.at - prevAt, 12 * 3_600_000) : null);
+    prevAt = c.at;
+    if (absorbedMl <= 0) continue;
+    const from = wearMs != null ? c.at - wearMs : -Infinity;
+    const loggedMl = wettings
+      .filter((w) => w.at > from && w.at <= c.at)
+      .reduce((s, w) => s + (voidEffectiveMl(w)?.ml ?? 0), 0);
+    const shortfallMl = absorbedMl - loggedMl;
+    if (shortfallMl >= minShortfallMl && loggedMl <= absorbedMl * maxLoggedFraction) {
+      out.push({
+        at: c.at, absorbedMl: Math.round(absorbedMl), loggedMl: Math.round(loggedMl),
+        shortfallMl: Math.round(shortfallMl), wearMs: wearMs ?? null,
+        productName: products.find((p) => p.id === c.productId)?.name,
+      });
+    }
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+
 /** A clock minute-of-day as a readable time, e.g. 305 → "5:05 AM". */
 export const minuteOfDayStr = (min: number) => {
   const h = Math.floor(min / 60) % 24;

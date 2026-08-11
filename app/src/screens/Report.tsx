@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { Topbar } from '../ui';
 import { buildClinicalSummary } from '../summary';
 import { voidedVolumeStats } from '@core';
-import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, voidClusterPatterns, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern, type ClusterPattern } from '../insights';
+import { voidsOf, toiletVoidsOf, leaksOf, nightsOf, changesOf, wettingsOf, incontinenceEpisodesOf, drinksOf, groupByDay, isWetNight, isDryNight, tally, share, productAdequacy, leakyProducts, hourlyRhythm, surgePatterns, voidClusterPatterns, unnoticedLosses, minuteOfDayStr, SURGE_THRESHOLD_ML, type HourBucket, type SurgePattern, type ClusterPattern, type UnnoticedLoss } from '../insights';
 import { isCaffeine, isAlcohol } from '../modules';
 import { fmtVol, type Units } from '../units';
 import { Icon } from '../icons';
@@ -126,6 +126,30 @@ function ClusterCard({ patterns, units }: { patterns: ClusterPattern[]; units: U
   );
 }
 
+/** Changes that came back wetter than what was logged — losses the user likely didn't feel,
+ * derived, never asked. The wear time turns "soaked" into a rate the provider can read. */
+function UnnoticedLossCard({ losses, units }: { losses: UnnoticedLoss[]; units: Units }) {
+  return (
+    <div className="card">
+      <h3>Losses you may not feel</h3>
+      <div className="sub" style={{ marginTop: 2 }}>
+        A product came back holding more than was logged into it — the gap is likely urine that escaped your notice.
+      </div>
+      <ul style={{ margin: '10px 0 0', paddingLeft: 18 }}>
+        {losses.slice(0, 4).map((l, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            {l.productName ? <b>{l.productName}</b> : 'A product'} held <b>{fmtVol(l.absorbedMl, units)}</b>
+            {l.wearMs ? ` over ~${Math.round(l.wearMs / 3_600_000)}h` : ''}, but only {fmtVol(l.loggedMl, units)} was logged — about <b>{fmtVol(l.shortfallMl, units)}</b> you may not have felt.
+          </li>
+        ))}
+      </ul>
+      <div className="sub" style={{ marginTop: 8 }}>
+        Losing urine you don't sense is worth mentioning to your provider.
+      </div>
+    </div>
+  );
+}
+
 export function Report() {
   const { entries, enabledModules, drinkTypes, units, reports, products, checkins, meds, navigate, openDetail, loadSample } = useStore();
   // Evening/bedtime medications are the ones that can shape the night numbers — surface them
@@ -146,6 +170,7 @@ export function Report() {
   const rhythm = hourlyRhythm(entries);
   const surges = surgePatterns(entries);
   const clusters = voidClusterPatterns(entries);
+  const losses = unnoticedLosses(entries, products);
   const has = (m: string) => enabledModules.includes(m);
 
   // A paste-able plain-text summary for a patient-portal message or a phone call with a
@@ -250,6 +275,7 @@ export function Report() {
       {rhythm.total >= 3 && <RhythmCard {...rhythm} />}
       {surges.length > 0 && <SurgeCard patterns={surges} />}
       {clusters.length > 0 && <ClusterCard patterns={clusters} units={units} />}
+      {losses.length > 0 && <UnnoticedLossCard losses={losses} units={units} />}
 
       <Card title="How it’s affecting you" onClick={() => navigate('checkin')}>
         {lastCk ? (

@@ -122,6 +122,10 @@ export interface ChangeEntry {
   at: number;
   productId: string | null;
   volumeMl: number | null;
+  /** How long the product had been worn, ms — the window this absorbed volume accrued over.
+   * Defaults to the gap since the last change (capped at 12h), adjustable at log time. Powers a
+   * soak *rate* and the "wetter than you logged" (unnoticed-loss) signal. */
+  wearMs?: number;
   answers: Record<string, string>;
 }
 /** A drink — fluid intake, the input side of the frequency-volume chart. */
@@ -220,7 +224,7 @@ interface Store extends State {
   /** The unified single-button log: one event described by where it went + how much, from which
    * the void/leak distinction and continence are derived. `escaped` only applies to a product. */
   logEvent: (e: { where: 'toilet' | 'product' | 'clothing'; size: string | null; escaped?: boolean; volumeMl?: number | null; productId?: string | null; answers?: Record<string, string>; at?: number }) => void;
-  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number }) => void;
+  logChange: (c: { productId: string | null; volumeMl: number | null; answers: Record<string, string>; at?: number; wearMs?: number }) => void;
   logDrink: (d: { type: string; volumeMl: number | null; at?: number }) => void;
   logCheckin: (c: { interference: number; bother: number }) => void;
   addMed: (name: string, timing: MedTiming) => void;
@@ -486,8 +490,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             answers,
           }],
         })),
-      logChange: ({ productId, volumeMl, answers, at }) =>
-        setState((s) => ({ ...s, notice: 'Change logged', entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, answers }] })),
+      logChange: ({ productId, volumeMl, answers, at, wearMs }) =>
+        setState((s) => ({ ...s, notice: 'Change logged', entries: [...s.entries, { kind: 'change', id: id(), at: at ?? Date.now(), productId, volumeMl, wearMs, answers }] })),
       logDrink: ({ type, volumeMl, at }) =>
         setState((s) => ({ ...s, notice: 'Drink logged', entries: [...s.entries, { kind: 'drink', id: id(), at: at ?? Date.now(), type, volumeMl }] })),
       logCheckin: ({ interference, bother }) =>

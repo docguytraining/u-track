@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, minuteOfDayStr } from './insights';
-import type { VoidEntry, NightEntry, DrinkEntry, Product } from './store';
+import { groupByDay, wettingsOf, leaksOf, incontinenceEpisodesOf, sometimesMissesToilet, awarenessReduced, productsForContext, productAdequacy, leakyProducts, isWetNight, isDryNight, tally, share, humanize, durationStr, hourlyRhythm, voidEffectiveMl, detectVolumeSurges, surgePatterns, detectVoidClusters, voidClusterPatterns, unnoticedLosses, minuteOfDayStr } from './insights';
+import type { VoidEntry, NightEntry, DrinkEntry, ChangeEntry, Product } from './store';
 
 const H = 3_600_000;
 const DAY = 86_400_000;
@@ -334,5 +334,32 @@ describe('voidClusterPatterns', () => {
   it('stays silent below the minimum logged days', () => {
     const base = Date.UTC(2026, 7, 5, 2, 0);
     expect(voidClusterPatterns([0, 1].flatMap((d) => clusterDay(d, base)))).toEqual([]);
+  });
+});
+
+describe('unnoticedLosses', () => {
+  const change = (at: number, volumeMl: number | null, fullness: string, wearMs?: number): ChangeEntry =>
+    ({ kind: 'change', id: `ch${at}`, at, productId: 'p1', volumeMl, wearMs, answers: fullness ? { fullness } : {} });
+  const products = [{ id: 'p1', name: 'Night brief', dryGrams: 40 }];
+
+  it('flags a soaked change with little logged into it', () => {
+    // Saturated (~500 mL) over 8h, but only one dribble (~15) logged in the window.
+    const entries = [wetting(noon - 2 * H, {}), change(noon, null, 'Saturated', 8 * H)];
+    // wetting() has no size → 0 estimate; make it a real small size instead:
+    const withSize: VoidEntry[] = [{ kind: 'void', id: 'w1', at: noon - 2 * H, where: 'product', leaked: false, volumeMl: null, size: 'Dribble', productId: null, answers: {} }];
+    const losses = unnoticedLosses([...withSize, change(noon, null, 'Saturated', 8 * H)], products);
+    expect(losses).toHaveLength(1);
+    expect(losses[0]!.absorbedMl).toBe(500);
+    expect(losses[0]!.loggedMl).toBe(15);
+    expect(losses[0]!.shortfallMl).toBe(485);
+  });
+
+  it('does not flag when what was logged accounts for the volume', () => {
+    const logged: VoidEntry[] = [
+      { kind: 'void', id: 'w1', at: noon - 3 * H, where: 'product', leaked: false, volumeMl: null, size: 'Large', productId: null, answers: {} }, // 300
+      { kind: 'void', id: 'w2', at: noon - 1 * H, where: 'product', leaked: false, volumeMl: null, size: 'Moderate', productId: null, answers: {} }, // 150
+    ];
+    // Heavy (~300 mL) but 450 logged into it → nothing unnoticed.
+    expect(unnoticedLosses([...logged, change(noon, null, 'Heavy', 6 * H)], products)).toHaveLength(0);
   });
 });

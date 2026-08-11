@@ -5,6 +5,19 @@ import { Topbar, OptionGroup, WhenField } from '../ui';
 import { fmtVol } from '../units';
 import { changesOf, wettingsOf, timeStr } from '../insights';
 
+const H = 3_600_000;
+// Wear-time buckets. The default guess never exceeds 12h — beyond that a gap almost always means
+// a missed change, not a real wear — but "More than 12h" is here to pick by hand if it truly was.
+const WEAR: { label: string; h: number }[] = [
+  { label: 'Under 2h', h: 1 },
+  { label: '2–4h', h: 3 },
+  { label: '4–8h', h: 6 },
+  { label: '8–12h', h: 10 },
+  { label: 'More than 12h', h: 16 },
+];
+/** Bucket index for a duration in hours, never auto-landing past the 12h cap (index 3). */
+const wearIdxFor = (hours: number) => { const h = Math.min(hours, 12); return h < 2 ? 0 : h < 4 ? 1 : h < 8 ? 2 : 3; };
+
 export function LogChange() {
   const { products, units, logChange, navigate, entries } = useStore();
   const [productId, setProductId] = useState(products[0]?.id ?? '');
@@ -22,8 +35,21 @@ export function LogChange() {
   const lastChangeAt = changesOf(entries).reduce((m, c) => Math.max(m, c.at), 0);
   const wettingsSince = wettingsOf(entries).filter((w) => w.at > lastChangeAt);
 
+  // Wear time only matters when the product came back with something in it — a bone-dry change
+  // over any span isn't a signal. Default to the (capped) gap since the last change.
+  const gapH = lastChangeAt ? (Date.now() - lastChangeAt) / H : null;
+  const overCap = gapH != null && gapH > 12;
+  const [wearIdx, setWearIdx] = useState(gapH != null ? wearIdxFor(gapH) : 2);
+  const hasAbsorption = volumeMl != null || ['Moderate', 'Heavy', 'Saturated'].includes(fullness);
+
   const done = () => {
-    logChange({ productId: productId || null, volumeMl, answers: fullness ? { fullness } : {}, at: at ?? undefined });
+    logChange({
+      productId: productId || null,
+      volumeMl,
+      answers: fullness ? { fullness } : {},
+      at: at ?? undefined,
+      wearMs: hasAbsorption ? WEAR[wearIdx]!.h * H : undefined,
+    });
     navigate('home');
   };
 
@@ -76,6 +102,18 @@ export function LogChange() {
             value={fullness}
             onChange={setFullness}
           />
+
+          {hasAbsorption && (
+            <div className="field">
+              <label>How long were you wearing it?</label>
+              <div className="chips">
+                {WEAR.map((w, i) => (
+                  <button key={w.label} className={wearIdx === i ? 'selected' : ''} onClick={() => setWearIdx(i)}>{w.label}</button>
+                ))}
+              </div>
+              {overCap && <p className="note">It’s been over 12h since your last logged change — we’ll assume 12h unless you set it. Did a change go unlogged?</p>}
+            </div>
+          )}
         </>
       )}
 
