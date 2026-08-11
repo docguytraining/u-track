@@ -15,7 +15,7 @@ It is **not** a diagnostic tool. It's a **trend tracker**: it records what happe
 Most tracking apps are either clinical spreadsheets or cheerful habit-streak toys. Incontinence deserves neither. u-track is built on a few firm principles:
 
 - **Describe, don't judge.** Every screen states a fact about what happened — no verdicts. A wet night and a dry night are recorded exactly the same way, like noting the weather. No shame, and no cheerleading either (a 🎉 for a dry night would quietly make a wet one a failure).
-- **Plain, clinical language — never a confession.** It uses the words your doctor uses, and it never asks you to justify a void make you feel bad about a medical condition.
+- **Plain, clinical language — never a confession.** It uses the words your doctor uses, and it never asks you to justify a void or make you feel bad about a medical condition.
 - **It only asks what applies to you.** A quick, plain-language setup infers what's relevant, so you're never staring at questions about symptoms you don't have. Day-to-day logging is a couple of taps.
 - **Every question earns its place.** Each one either gives your doctor something they'd actually act on, or helps you see a pattern that gives you more control. If it does neither, it's not there.
 - **Your data is yours.** Use it as a guest and it never leaves your device; sign in and it syncs privately to your own cloud store. It's never sold or shared.
